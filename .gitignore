@@ -1,0 +1,39 @@
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rcheck/
+*.tar.gz
+
+# Native builds
+*.o
+*.obj
+*.so
+*.dll
+*.dylib
+*.exe
+*.pdb
+build/
+.goose/
+
+# Toolchains downloaded for local use (not vendored)
+toolchains/
+
+# Benchmarks: keep reports and CSV, ignore scratch
+bench/**/scratch/
+
+# Python helpers
+__pycache__/
+.venv/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*

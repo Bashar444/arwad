@@ -1,0 +1,9 @@
+"metric","value","share"
+"packages",25504,100
+"needs_compilation_yes",5581,21.9
+"needs_compilation_no",19923,78.1
+"linking_to_rcpp",3378,13.2
+"linking_to_rcpparmadillo",1370,5.4
+"linking_to_cpp11",114,0.4
+"licence_mentions_gpl",16521,64.8
+"licence_mentions_mit",7331,28.7

@@ -1,0 +1,76 @@
+# Roadmap
+
+Durations are estimates for a solo project lead working with AI agent teams ([AGENT_TEAM.md](AGENT_TEAM.md)). They will be re-estimated once Phase 0 produces real measurements.
+
+## Phase 0: Foundations (2–4 weeks)
+
+| # | Task | Output |
+|---|---|---|
+| 0.1 | Install Goose v2026.3 (Windows x64 locally, Linux x64 in CI); compile and run the bundled samples; record versions | `bench/phase0/ENVIRONMENT.md` |
+| 0.2 | Hand-write a Goose OLS kernel: Householder QR without pivoting for full-rank designs, returning coefficients, residual variance and standard errors | `kernels/ols.goose` |
+| 0.3 | Hand-write a nonparametric case bootstrap of the OLS coefficients: B = 10,000 resamples, n = 1,000 rows, k = 10 predictors. Resampling indices come from R's RNG and are passed in, so equivalence is not confounded by RNG differences | `kernels/bootstrap.goose` |
+| 0.4 | Bind both to R through a minimal C shim and `.Call`; confirm inputs are read without copying | `rgoose-poc/` |
+| 0.5 | Equivalence harness against `lm.fit`/`qr` and a pure-R bootstrap; report maximum absolute and relative error | `tests/equivalence/` |
+| 0.6 | Benchmark harness ([BENCHMARK_METHOD.md](BENCHMARK_METHOD.md)): pure R, byte-compiled R, Rcpp/RcppArmadillo, R-Goose; wall time and peak memory | `bench/phase0/` |
+| 0.7 | Report with raw data, whatever the result | `bench/phase0/REPORT.md` |
+
+**Exit:** the report exists; equivalence is within 1e-9 relative error; a decision memo says *proceed*, *adjust* or *change back end*.
+
+## Phase 1: Compiler vertical slice (2–4 months)
+
+- `rgoose` R package skeleton that passes `R CMD check` on Windows, Linux and macOS.
+- Front end from R parse data to RG-IR; type and shape inference; memory planner; Goose emitter; TinyCC and clang build paths; content-hash cache.
+- `rg_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason.
+- Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`).
+- Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test.
+
+**Exit:** every corpus function either compiles or falls back correctly; all compiled functions match GNU R within 1e-9; no memory errors under AddressSanitizer.
+
+## Phase 2: Statistical engines (4–8 months)
+
+Each engine is validated against its reference package on 50 datasets.
+
+| Engine | Reference |
+|---|---|
+| OLS, WLS, GLM (IRLS) | `stats::lm`, `stats::glm` |
+| PLS-SEM path algorithm with 10,000-replicate bootstrap and bias-corrected percentile intervals | `seminr` |
+| DEA (CCR and BCC; input and output orientation) | `Benchmarking` |
+| Panel fixed and random effects; Hausman test | `plm` |
+| ARIMA likelihood; GARCH(1,1) family | `stats::arima`, `rugarch` |
+| Meta-analysis: fixed effect and random effects (REML) | `metafor` |
+
+Data frames enter the static tier as column sets of known types.
+
+**Exit:** every engine passes equivalence; benchmark report published internally; preprint drafted.
+
+## Phase 3: Parallel and WebAssembly (2–4 months)
+
+- Share-nothing parallel resampling through Goose worker programs.
+- WebAssembly build of the static tier (Goose → C → wasm) and a browser demo: load a CSV and run a 5,000-replicate bootstrap locally.
+- Methods paper submitted (*Journal of Statistical Software* or *The R Journal*).
+- First public release, subject to the project lead's decision in [ADR-0003](adr/0003-mit-licence-dco-clean-room.md).
+
+**Exit:** demo live; paper submitted; v0.1.0 tagged with a Zenodo DOI.
+
+## Phase 4: Standalone runtime (12–24 months)
+
+- ADR choosing the implementation language of the dynamic tier.
+- Evaluator for full R semantics; base and recommended packages; package loader; R C-API layer prioritised by the symbol census ([COMPATIBILITY.md](COMPATIBILITY.md)).
+- Nightly CRAN dashboard.
+
+**Exit:** at least 50% of CRAN packages pass natively (L1 + L2).
+
+## Phase 5: Full ecosystem (24 months and beyond)
+
+- S4 and `methods` completeness, Rcpp coverage, graphics devices, Fortran toolchain integration, tcltk, and the long tail.
+
+**Exit:** at least 95%, then 99%, of CRAN passes natively, and R-Goose runs without GNU R installed.
+
+## Decided now, decided later
+
+| Decided now | Decided later (by ADR) |
+|---|---|
+| Two-tier architecture ([ADR-0001](adr/0001-two-tier-runtime.md)) | Implementation language of the dynamic tier (start of Phase 4) |
+| Goose as the first native back end ([ADR-0002](adr/0002-goose-native-backend.md)) | Final public name (before the first public release) |
+| MIT, DCO and clean room ([ADR-0003](adr/0003-mit-licence-dco-clean-room.md)) | Patent position (before any public disclosure) |
+| Numerical-equivalence gate ([ADR-0004](adr/0004-numerical-equivalence-gate.md)) | |
