@@ -23,7 +23,7 @@ Licence categories overlap because some packages are dual-licensed.
 
 | Level | Meaning | Available from |
 |---|---|---|
-| **L0 Hosted** | The package runs on GNU R with `rgoose` loaded | Phase 1, for every package |
+| **L0 Hosted** | The package runs on GNU R with `arwad` loaded | Phase 1, for every package |
 | **L1 Native, pure R** | A pure-R package runs on the standalone evaluator | Phase 4 |
 | **L2 Native, compiled** | A package with C, C++ or Fortran code runs through the R C-API layer | Phases 4–5 |
 | **L3 Accelerated** | A package's hot functions run in the static tier | Phase 2 onward, package by package |
@@ -36,7 +36,7 @@ A package is supported at a level when its examples, its tests (testthat, tinyte
 
 1. **C-API symbol census.** Build every compiled CRAN package once against GNU R, record which R API entry points its object code references, rank the entry points by how many packages need them, and implement them in that order.
 2. **Dependency order.** Base and recommended packages first (base, stats, utils, methods, graphics, grDevices, tools, MASS, Matrix, survival, lattice, nlme, mgcv and the rest), then the most depended-upon packages above (rlang, vctrs, cli, glue, Rcpp, tibble, dplyr), because each one unlocks thousands of dependants.
-3. **Nightly dashboard.** Run every package's checks on GNU R and on R-Goose, publish pass rates by level, and open an issue automatically for every regression.
+3. **Nightly dashboard.** Run every package's checks on GNU R and on Arwad, publish pass rates by level, and open an issue automatically for every regression.
 4. **Rcpp.** Rcpp and RcppArmadillo are largely header-only C++ layers over the R C API. Once the C-API layer covers what they use, the 3,378 packages linking to Rcpp (overlapping with the 1,370 linking to RcppArmadillo) can follow.
 
 ## 5. Targets

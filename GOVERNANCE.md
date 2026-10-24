@@ -2,7 +2,7 @@
 
 ## Project lead
 
-**Dr. Bashar Al Agha** ([ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)) founded R-Goose and has final authority on its direction, architecture decisions, releases, licensing and name.
+**Dr. Bashar Al Agha** ([ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)) founded Arwad and has final authority on its direction, architecture decisions, releases, licensing and name.
 
 ## How decisions are made
 

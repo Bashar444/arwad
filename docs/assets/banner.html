@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arwad banner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Crimson+Pro:wght@500;600&family=JetBrains+Mono:wght@500&display=block" rel="stylesheet">
+<style>
+  /* Same design system as the Bashar444 profile banner (ui-ux-pro-max: Exaggerated
+     Minimalism, Research Lab palette, Crimson Pro + Atkinson Hyperlegible + JetBrains Mono).
+     Transparent canvas; render with ?theme=light or ?theme=dark. */
+  :root { --fg:#0F172A; --sub:#334155; --muted:#64748B; --accent:#A16207; --bar:#1E3A5F; --axis:#94A3B8; }
+  :root[data-theme="dark"] { --fg:#F1F5F9; --sub:#CBD5E1; --muted:#94A3B8; --accent:#E3B341; --bar:#9DB9DC; --axis:#475569; }
+  html, body { margin:0; padding:0; background:transparent; }
+  .banner { width:1280px; height:300px; box-sizing:border-box; padding:40px 64px 40px 60px;
+            display:flex; align-items:center; justify-content:space-between;
+            font-family:'Atkinson Hyperlegible', sans-serif; }
+  .eyebrow { font-family:'JetBrains Mono', monospace; font-weight:500; font-size:14px;
+             letter-spacing:0.24em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
+  h1 { font-family:'Crimson Pro', serif; font-weight:600; font-size:108px; line-height:0.95;
+       letter-spacing:-0.01em; color:var(--fg); margin:0; }
+  .rule { width:72px; height:3px; background:var(--accent); margin:16px 0 14px; border-radius:2px; }
+  .tag { font-size:27px; color:var(--fg); margin:0 0 6px; font-weight:700; }
+  .sub { font-size:17px; color:var(--muted); margin:0; white-space:nowrap; }
+  .text { flex:1; min-width:0; }
+  figure { margin:0; width:430px; flex:none; display:flex; flex-direction:column; align-items:flex-end; }
+  figcaption { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:0.02em;
+               color:var(--muted); margin-top:8px; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="banner">
+  <div class="text">
+    <p class="eyebrow">A statistical programming language</p>
+    <h1>Arwad</h1>
+    <div class="rule"></div>
+    <p class="tag">R, compiled.</p>
+    <p class="sub">R syntax and CRAN, compiled to native code with deterministic memory</p>
+  </div>
+  <figure>
+    <svg id="hist" width="430" height="176" viewBox="0 0 430 176" aria-hidden="true"></svg>
+    <figcaption>10,000-replicate bootstrap, computed by Arwad's first kernel</figcaption>
+  </figure>
+</div>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme');
+  if (theme === 'dark') document.documentElement.dataset.theme = 'dark';
+  // Real output: coefficient x9, Phase 0 bootstrap (bench/phase0), bins of width 0.005 from 0.885.
+  const counts = [4,2,2,8,13,14,16,29,55,68,100,144,159,207,270,320,360,417,495,512,606,614,625,618,596,566,557,497,407,339,323,246,232,165,139,80,58,58,27,13,17,10,4,5,2,0,0,0,0,1];
+  const lo = 0.885, width = 0.005, estimate = 0.999621;
+  const W = 430, H = 176, L = 4, R = 426, T = 6, B = 168;
+  const css = getComputedStyle(document.documentElement);
+  const col = k => css.getPropertyValue(k).trim();
+  const svg = document.getElementById('hist');
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag, a) => { const e = document.createElementNS(ns, tag); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; };
+  const max = Math.max(...counts), bw = (R - L) / counts.length;
+  counts.forEach((c, i) => {
+    const h = (B - T) * c / max;
+    if (h > 0) el('rect', { x: L + i * bw + 0.8, y: B - h, width: bw - 1.6, height: h, rx: 1.2,
+                            fill: col('--bar'), 'fill-opacity': 0.82 });
+  });
+  el('line', { x1: L, y1: B + 0.5, x2: R, y2: B + 0.5, stroke: col('--axis'), 'stroke-width': 1.4 });
+  const ex = L + (estimate - lo) / width * bw;
+  el('line', { x1: ex, y1: T - 2, x2: ex, y2: B, stroke: col('--accent'), 'stroke-width': 3, 'stroke-linecap': 'round' });
+</script>
+</body>
+</html>

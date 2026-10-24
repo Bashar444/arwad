@@ -2,6 +2,8 @@
 
 **Date:** 24 October 2026 (updated the same day with an optimising back end and the R binding) · **Status:** preliminary, single laptop · **Verdict:** proceed.
 
+*Measured under the project's working title, R-Goose (commit `f00d17c`). The files and symbols were renamed for Arwad afterwards without changing the code; a re-run of the renamed build reproduced the same agreement with R (3.74e-15 single fit, 2.8e-15 bootstrap SDs).*
+
 ## Summary
 
 | Result | Value |
@@ -66,7 +68,7 @@ Outputs: `goose_gccO2_run1..3.txt`.
 
 ### 4c. Called from R (Phase 0.4)
 
-The kernels in [`poc/rgoose_kernels.goose`](../../poc/rgoose_kernels.goose) are exported with `export fn`, compiled with `goose -O2 --standalone --header`, and linked into an R-loadable DLL by `R CMD SHLIB` through a small C bridge ([`poc/shim.c`](../../poc/shim.c)). R's matrices are passed to Goose as slices pointing at R's own memory; the result matrix is allocated by R and filled in by Goose. The bridge validates every index before the call, so bad input raises an R error instead of crashing R. Script: [`poc/run_poc.R`](../../poc/run_poc.R).
+The kernels in [`poc/arwad_kernels.goose`](../../poc/arwad_kernels.goose) are exported with `export fn`, compiled with `goose -O2 --standalone --header`, and linked into an R-loadable DLL by `R CMD SHLIB` through a small C bridge ([`poc/shim.c`](../../poc/shim.c)). R's matrices are passed to Goose as slices pointing at R's own memory; the result matrix is allocated by R and filled in by Goose. The bridge validates every index before the call, so bad input raises an R error instead of crashing R. Script: [`poc/run_poc.R`](../../poc/run_poc.R).
 
 | Contender (B = 10,000, n = 1,000, k = 10) | Runs (s) | Median (s) | Speed-up vs `.lm.fit` loop |
 |---|---|---:|---:|
@@ -84,11 +86,11 @@ The kernels in [`poc/rgoose_kernels.goose`](../../poc/rgoose_kernels.goose) are 
 ## 5. Interpretation
 
 1. **Feasibility for correctness is established.** A statistical kernel written in Goose reproduces GNU R to about 1e-14, with identical resampling streams.
-2. **Where R's interpreter dominates, Goose wins clearly.** The scalar loop ran about 17 times faster even with TinyCC, which does not optimise. This is the class of code R users write themselves (loops, simulations, custom estimators) and the primary target of R-Goose.
+2. **Where R's interpreter dominates, Goose wins clearly.** The scalar loop ran about 17 times faster even with TinyCC, which does not optimise. This is the class of code R users write themselves (loops, simulations, custom estimators) and the primary target of Arwad.
 3. **Where R already calls compiled Fortran, TinyCC-compiled Goose loses.** `.lm.fit` spends its time inside LINPACK compiled with an optimising compiler. A hand-written QR compiled by TinyCC is about three times slower. This is a comparison of C compilers, not of memory models.
 4. **Strategy adjustment:** do not compete with Fortran on dense floating-point work. Call BLAS/LAPACK from Goose through `extern fn` for factorisations (as [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5 already plans), and target the overheads R adds around them: per-iteration interpretation, allocation and copying (`X[ii, ]` allocates about 80 KB per replicate in R), and parallel execution through Goose's share-nothing workers.
 
-5. **Confirmed after §4b–4c:** with an optimising compiler, the same hand-written kernel beats R's best loop, and called from R it is 1.59× faster while allocating about 46 times less memory in R. Both sides perform the same QR arithmetic, so the gain is R's per-replicate interpretation, allocation and copying, which is exactly the overhead R-Goose is designed to remove.
+5. **Confirmed after §4b–4c:** with an optimising compiler, the same hand-written kernel beats R's best loop, and called from R it is 1.59× faster while allocating about 46 times less memory in R. Both sides perform the same QR arithmetic, so the gain is R's per-replicate interpretation, allocation and copying, which is exactly the overhead Arwad is designed to remove.
 
 ## 6. Not yet measured
 

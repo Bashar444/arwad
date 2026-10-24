@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Phase 0.4 proof of concept: Goose kernels -> C -> rgoosepoc.dll for R.
+# Build the Phase 0.4 proof of concept: Goose kernels -> C -> arwadpoc.dll for R.
 # Run from the repository root in Git Bash:  bash poc/build.sh
 set -euo pipefail
 
@@ -10,6 +10,6 @@ export GOOSE_HOME="${GOOSE_HOME:-D:/_caches/goose}"
 export PATH="/d/rtools45/x86_64-w64-mingw32.static.posix/bin:/d/rtools45/usr/bin:$PATH"
 
 cd poc
-"../$GOOSE" -O2 --standalone --header rgoose_kernels.h -o rgoose_kernels.c rgoose_kernels.goose
-"$R_HOME_DIR/bin/x64/R.exe" CMD SHLIB -o rgoosepoc.dll shim.c rgoose_kernels.c
-echo "built poc/rgoosepoc.dll"
+"../$GOOSE" -O2 --standalone --header arwad_kernels.h -o arwad_kernels.c arwad_kernels.goose
+"$R_HOME_DIR/bin/x64/R.exe" CMD SHLIB -o arwadpoc.dll shim.c arwad_kernels.c
+echo "built poc/arwadpoc.dll"

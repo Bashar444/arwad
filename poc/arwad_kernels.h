@@ -36,8 +36,8 @@ struct ByteSet_g {
 extern "C" {
 #endif
 void goose_init(int argc, char **argv);
-void rg_ols(sl_f64 gs_export_arg0, sl_f64 gs_export_arg1, int64_t gs_export_arg2, int64_t gs_export_arg3, sl_f64 gs_export_arg4);
-void rg_boot_ols(sl_f64 gs_export_arg0_2, sl_f64 gs_export_arg1_2, sl_i32 gs_export_arg2_2, int64_t gs_export_arg3_2, int64_t gs_export_arg4_2, int64_t gs_export_arg5, sl_f64 gs_export_arg6);
+void aw_ols(sl_f64 gs_export_arg0, sl_f64 gs_export_arg1, int64_t gs_export_arg2, int64_t gs_export_arg3, sl_f64 gs_export_arg4);
+void aw_boot_ols(sl_f64 gs_export_arg0_2, sl_f64 gs_export_arg1_2, sl_i32 gs_export_arg2_2, int64_t gs_export_arg3_2, int64_t gs_export_arg4_2, int64_t gs_export_arg5, sl_f64 gs_export_arg6);
 #ifdef __cplusplus
 }
 #endif

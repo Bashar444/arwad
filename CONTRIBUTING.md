@@ -1,6 +1,6 @@
-# Contributing to R-Goose
+# Contributing to Arwad
 
-R-Goose is in a private design phase. These rules apply to the project lead's agent team now and to outside contributors after the first public release.
+Arwad is in Phase 0 ([docs/ROADMAP.md](docs/ROADMAP.md)). These rules apply equally to the project lead's agent team and to outside contributors. Questions and ideas are welcome as issues.
 
 ## Non-negotiable rules
 

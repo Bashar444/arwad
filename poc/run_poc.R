@@ -5,9 +5,9 @@ args <- commandArgs(trailingOnly = TRUE)
 B <- if (length(args) >= 1) as.integer(args[1]) else 10000L
 runs <- if (length(args) >= 2) as.integer(args[2]) else 3L
 
-dll <- dyn.load(file.path("poc", "rgoosepoc.dll"))
-rg_ols <- function(X, y) .Call("rg_ols_call", X, y, PACKAGE = "rgoosepoc")
-rg_boot <- function(X, y, idx) .Call("rg_boot_ols_call", X, y, idx, PACKAGE = "rgoosepoc")
+dll <- dyn.load(file.path("poc", "arwadpoc.dll"))
+aw_ols <- function(X, y) .Call("aw_ols_call", X, y, PACKAGE = "arwadpoc")
+aw_boot <- function(X, y, idx) .Call("aw_boot_ols_call", X, y, idx, PACKAGE = "arwadpoc")
 
 d <- read.csv(file.path("bench", "phase0", "data.csv"))
 n <- nrow(d)
@@ -28,7 +28,7 @@ cat("index checksum:", sum(as.numeric(idx)), "\n")
 
 # 1. Equivalence of a single fit.
 b_r <- lm.fit(X, y)$coefficients
-b_g <- rg_ols(X, y)
+b_g <- aw_ols(X, y)
 cat(sprintf("single fit: max relative error vs lm.fit = %.3g\n", max(abs(b_g - b_r) / abs(b_r))))
 
 # 2. Bootstrap: R loops vs one .Call into Goose.
@@ -43,7 +43,7 @@ time_it <- function(expr_fun) {
 res <- NULL
 t_lmfit <- time_it(function() boot_r(function(x, y) lm.fit(x, y)$coefficients)); c_lmfit <- res
 t_dot <- time_it(function() boot_r(function(x, y) .lm.fit(x, y)$coefficients)); c_dot <- res
-t_goose <- time_it(function() rg_boot(X, y, idx)); c_goose <- res
+t_goose <- time_it(function() aw_boot(X, y, idx)); c_goose <- res
 
 rel <- function(a, b) max(abs(a - b) / pmax(abs(b), 1e-300))
 cat(sprintf("bootstrap: max relative error Goose vs lm.fit loop = %.3g\n", rel(c_goose, c_lmfit)))
@@ -53,7 +53,7 @@ cat(sprintf("bootstrap SDs: max relative error = %.3g\n",
 # 3. Memory R allocates for each approach (one replicate set), if 'bench' is available.
 if (requireNamespace("bench", quietly = TRUE)) {
   bm <- bench::mark(
-    goose = rg_boot(X, y, idx[, 1:100, drop = FALSE]),
+    goose = aw_boot(X, y, idx[, 1:100, drop = FALSE]),
     dot_lm_fit = { o <- matrix(0, ncol(X), 100); for (b in 1:100) { ii <- idx[, b]; o[, b] <- .lm.fit(X[ii, , drop = FALSE], y[ii])$coefficients }; o },
     iterations = 5, check = FALSE, filter_gc = FALSE)
   cat("\nR memory allocated per 100 replicates:\n")

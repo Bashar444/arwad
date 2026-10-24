@@ -1,6 +1,6 @@
 # Agent team: ten builder–verifier duets
 
-R-Goose is built by one project lead directing AI agents. Each work area has a **builder** and an **adversarial verifier** drawn from a *different* model family, so the verifier does not share the builder's blind spots. Twenty roles, ten duets.
+Arwad is built by one project lead directing AI agents. Each work area has a **builder** and an **adversarial verifier** drawn from a *different* model family, so the verifier does not share the builder's blind spots. Twenty roles, ten duets.
 
 ## 1. Roles and tools on the project lead's workstation
 
@@ -20,7 +20,7 @@ R-Goose is built by one project lead directing AI agents. Each work area has a *
 | 3 | Memory planner | Storage plans and peak-memory bounds | Bounds proofs, Goose `checkfree fn` kernels, AddressSanitizer builds |
 | 4 | Goose emitter | Goose modules with `export fn` entry points | Compiling every emitted module; any warning fails |
 | 5 | Native build and cache | TinyCC and clang paths; content-hash cache | Reproducible-build checks; stale-cache scenarios |
-| 6 | R binding | The `rgoose` package and `.Call` glue | `R CMD check --as-cran`, rchk, sanitiser builds |
+| 6 | R binding | The `arwad` package and `.Call` glue | `R CMD check --as-cran`, rchk, sanitiser builds |
 | 7 | Linear algebra | QR, Cholesky, BLAS/LAPACK bindings | NIST StRD regression sets (Longley, Filip, Wampler) and ill-conditioned designs |
 | 8 | Statistical engines | OLS/GLM, PLS-SEM, DEA, panel, time series, meta-analysis | Equivalence against `stats`, `seminr`, `Benchmarking`, `plm`, `rugarch`, `metafor` on 50 datasets each |
 | 9 | Random numbers and resampling | Bit-exact Mersenne-Twister, inversion normals, `sample()` | Stream equality with GNU R across seeds and lengths |

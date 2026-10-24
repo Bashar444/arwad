@@ -18,9 +18,9 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 
 ## Phase 1: Compiler vertical slice (2–4 months)
 
-- `rgoose` R package skeleton that passes `R CMD check` on Windows, Linux and macOS.
+- `arwad` R package skeleton that passes `R CMD check` on Windows, Linux and macOS.
 - Front end from R parse data to RG-IR; type and shape inference; memory planner; Goose emitter; TinyCC and clang build paths; content-hash cache.
-- `rg_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason.
+- `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason.
 - Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`).
 - Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test.
 
@@ -64,13 +64,13 @@ Data frames enter the static tier as column sets of known types.
 
 - S4 and `methods` completeness, Rcpp coverage, graphics devices, Fortran toolchain integration, tcltk, and the long tail.
 
-**Exit:** at least 95%, then 99%, of CRAN passes natively, and R-Goose runs without GNU R installed.
+**Exit:** at least 95%, then 99%, of CRAN passes natively, and Arwad runs without GNU R installed.
 
 ## Decided now, decided later
 
 | Decided now | Decided later (by ADR) |
 |---|---|
 | Two-tier architecture ([ADR-0001](adr/0001-two-tier-runtime.md)) | Implementation language of the dynamic tier (start of Phase 4) |
-| Goose as the first native back end ([ADR-0002](adr/0002-goose-native-backend.md)) | Final public name (before the first public release) |
-| MIT, DCO and clean room ([ADR-0003](adr/0003-mit-licence-dco-clean-room.md)) | Patent position (before any public disclosure) |
+| Goose as the first native back end ([ADR-0002](adr/0002-goose-native-backend.md)) | |
+| MIT, DCO, clean room, no patent, the name Arwad ([ADR-0003](adr/0003-mit-licence-dco-clean-room.md)) | |
 | Numerical-equivalence gate ([ADR-0004](adr/0004-numerical-equivalence-gate.md)) | |

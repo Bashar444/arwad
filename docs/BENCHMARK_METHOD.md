@@ -19,7 +19,7 @@ CPU model, core count, RAM, operating system; R version and BLAS (reference, Ope
 
 1. Plain R as users write it (byte-compiled by R's default JIT).
 2. The best available R implementation: vectorised code, `data.table`, or Rcpp/RcppArmadillo where a well-known implementation exists.
-3. R-Goose with the TinyCC back end and with the clang (or MSVC) back end.
+3. Arwad with the TinyCC back end and with the clang (or MSVC) back end.
 
 ## 4. Fairness rules
 
@@ -33,4 +33,4 @@ CPU model, core count, RAM, operating system; R version and BLAS (reference, Ope
 - Median and interquartile range per contender; speed-up ratios with bootstrap confidence intervals.
 - Cold (first call, including compilation) and warm figures, labelled.
 - Raw CSV and the exact scripts are committed next to the report.
-- Results are reported whatever they show, including cases where R-Goose is slower.
+- Results are reported whatever they show, including cases where Arwad is slower.

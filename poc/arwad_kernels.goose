@@ -40,7 +40,7 @@ fn ols_qr(a: f64[:], y: f64[:], n: i64, k: i64, rdiag: f64[:], beta: f64[:]) {
 }
 
 // One OLS fit. x: R matrix n x k (column-major), y: length n, beta: length k (output).
-export "rg_ols" fn rg_ols(x: const f64[:], y: const f64[:], n: i64, k: i64, beta: f64[:]) {
+export "aw_ols" fn aw_ols(x: const f64[:], y: const f64[:], n: i64, k: i64, beta: f64[:]) {
     var a: f64[>..] = [];
     a.append(x);
     var yy: f64[>..] = [];
@@ -52,7 +52,7 @@ export "rg_ols" fn rg_ols(x: const f64[:], y: const f64[:], n: i64, k: i64, beta
 
 // Case bootstrap of OLS coefficients. idx: R integer matrix n x reps with
 // 1-based row indices (validated by the caller); out: R matrix k x reps.
-export "rg_boot_ols" fn rg_boot_ols(x: const f64[:], y: const f64[:], idx: const i32[:], n: i64, k: i64, reps: i64, out: f64[:]) {
+export "aw_boot_ols" fn aw_boot_ols(x: const f64[:], y: const f64[:], idx: const i32[:], n: i64, k: i64, reps: i64, out: f64[:]) {
     var rdiag: f64[>..] = [];
     rdiag.resize(k, 0.0);
     var bb: f64[>..] = [];

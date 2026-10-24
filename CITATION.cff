@@ -1,22 +1,22 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 type: software
-title: "R-Goose: a compiled, memory-deterministic engine for statistical computing (working title)"
-abstract: "R-Goose keeps R's syntax and package ecosystem and compiles numerical work to native code through the Goose systems language, with deterministic, garbage-collection-free memory and results equivalent to GNU R."
+title: "Arwad: R, compiled"
+abstract: "Arwad is a statistical programming language that keeps R's syntax and package ecosystem and compiles numerical work to native code through the Goose systems language, with deterministic, garbage-collection-free memory and results equivalent to GNU R."
 authors:
   - family-names: "Al Agha"
     given-names: "Bashar"
     orcid: "https://orcid.org/0009-0004-5178-2345"
     affiliation: "SRM Institute of Science and Technology"
     email: "ba8160@srmist.edu.in"
-repository-code: "https://github.com/Bashar444/rgoose"
+repository-code: "https://github.com/Bashar444/arwad"
 license: MIT
-version: "0.0.0"
+version: "0.0.1"
 date-released: "2026-10-24"
 keywords:
   - statistical-computing
   - r
   - compiler
-  - goose
+  - programming-language
   - bootstrap
   - research-software

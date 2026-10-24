@@ -18,7 +18,7 @@ Copyright in the code arises automatically when it is written (Berne Convention;
 | Lever | What it protects | Action |
 |---|---|---|
 | Copyright | The code as written | Automatic; keep the notice in `LICENSE` |
-| **Trademark** | The *name* and *logo*: only the owner can call a release "R-Goose" | Choose a distinctive final name, then register it (India: classes 9 and 42) |
+| **Trademark** | The *name* and *logo*: only the owner can call a release "Arwad" | Clearance search, then register "Arwad" (India: classes 9 and 42), then extend abroad through the Madrid Protocol |
 | Control of the official repository and releases | Which build is the authentic one | Project lead holds owner rights; releases are signed and tagged |
 | Priority and credit | Who did it first | Dated commits; Zenodo DOI per release; peer-reviewed methods paper |
 
@@ -26,12 +26,17 @@ Trademark is the strongest lever: Linux, Python and Rust are open source, yet th
 
 ## 4. The project name
 
-"R-Goose" is a **working title**. Before the first public release:
+**Arwad** (confirmed 24 October 2026; the working title was "R-Goose"). Arwad is Syria's only inhabited island, the ancient Phoenician city of Arados; the Phoenicians carried the alphabet across the Mediterranean. Like Java and Kotlin, the language is named after an island.
 
-- "Goose" is the name of Wouter van Oortmerssen's language and also of Block's open-source AI agent *goose*, now hosted by the Linux Foundation's Agentic AI Foundation. A name built on it is weak as a trademark and may imply an affiliation that does not exist. Options: ask the Goose author for permission to use the name, or choose an independent name.
-- R-Goose does not use the R logo and does not imply endorsement by the R Foundation or the R Core Team.
+| Candidate | Why it was set aside |
+|---|---|
+| R-Goose | "Goose" is the name of Wouter van Oortmerssen's language and of Block's open-source AI agent *goose* (Linux Foundation, Agentic AI Foundation): weak as a trademark and suggests an affiliation that does not exist |
+| R++ | Already in use: commercial statistics software by Christophe Genolini that generates and runs R code, and earlier a Bell Labs rule-based extension of C++; `+` is not allowed in GitHub repository names, CRAN package names or domain names, and search engines ignore it |
+| Anser, Ebla, Statera | Squatted GitHub and npm names; search results dominated by other meanings |
 
-Decision recorded in [ADR-0003](adr/0003-mit-licence-dco-clean-room.md).
+Availability on 24 October 2026: `arwad` was free on CRAN, PyPI and npm; `arwad.dev`, `arwadlang.org` and `arwad-lang.org` showed no registration; a quick search found no software trademark. A professional clearance search must precede the trademark application.
+
+Arwad does not use the R logo and does not imply endorsement by the R Foundation or the R Core Team. Decision recorded in [ADR-0003](adr/0003-mit-licence-dco-clean-room.md).
 
 ## 5. Patent assessment
 
@@ -42,18 +47,18 @@ Decision recorded in [ADR-0003](adr/0003-mit-licence-dco-clean-room.md).
 | What prior art exists? | Goose's memory model is public (since 30 August 2026); compiling R or R subsets to native code has a long history (Section 8 of [ARCHITECTURE.md](ARCHITECTURE.md)). A claim would have to rest on a specific, non-obvious technical method, such as the memory planner for statistical resampling. |
 | Cost | Professional drafting and prosecution, plus foreign filings for international protection. |
 
-**Default position:** do not pursue a patent unless a patent attorney identifies a concrete, novel technical method *before any public disclosure*. The working plan is MIT open source, plus a registered trademark, plus a peer-reviewed methods paper. The repository stays private until the project lead records the decision.
+**Decision (24 October 2026): no patent.** The plan is MIT open source worldwide, plus a registered trademark (India first, then the Madrid Protocol for other countries), plus a peer-reviewed methods paper. Recorded in [ADR-0003](adr/0003-mit-licence-dco-clean-room.md).
 
 ## 6. Licence compatibility
 
-| Component | Licence | Role in R-Goose | Obligation |
+| Component | Licence | Role in Arwad | Obligation |
 |---|---|---|---|
 | Goose compiler and runtime | Apache-2.0 | Build tool; its runtime C is linked into compiled kernels | Keep Goose's `LICENSE` and `NOTICE` when redistributing it or its runtime; compatible with distribution alongside MIT code |
 | GNU R | GPL-2 or GPL-3 | Host runtime in Phases 1–3 | Never copy GPL source into this repository (clean room) |
-| R API headers (`R.h`, `Rinternals.h`, …) | LGPL-2.1 or later (per R's `COPYRIGHTS` file) | The `rgoose` package compiles against them | Permitted for MIT-licensed packages, as thousands of CRAN packages do |
+| R API headers (`R.h`, `Rinternals.h`, …) | LGPL-2.1 or later (per R's `COPYRIGHTS` file) | The `arwad` package compiles against them | Permitted for MIT-licensed packages, as thousands of CRAN packages do |
 | tree-sitter-r (Phase 4 candidate) | MIT | Parser for the standalone runtime | Keep its notice |
 | Reference BLAS/LAPACK, OpenBLAS | BSD-style | Linear algebra | Keep notices |
-| CRAN packages | Each package's own licence (64.8% mention GPL, 28.7% MIT) | Run by R-Goose; not bundled in its distribution | Each package keeps its own licence |
+| CRAN packages | Each package's own licence (64.8% mention GPL, 28.7% MIT) | Run by Arwad; not bundled in its distribution | Each package keeps its own licence |
 
 ## 7. Contributions
 

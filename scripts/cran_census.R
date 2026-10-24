@@ -1,4 +1,4 @@
-# CRAN census for R-Goose compatibility planning.
+# CRAN census for Arwad compatibility planning.
 # Reproduce with: Rscript scripts/cran_census.R
 # Writes research/cran_census_<date>.csv and prints the summary used in docs/COMPATIBILITY.md.
 

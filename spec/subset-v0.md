@@ -1,6 +1,6 @@
 # Compilable subset, version 0 (Phase 1)
 
-`rg_compile(f)` compiles a function only if every construct it uses is listed here. Otherwise it returns `f` unchanged and records the reason in `attr(result, "rgoose_fallback")`.
+`aw_compile(f)` compiles a function only if every construct it uses is listed here. Otherwise it returns `f` unchanged and records the reason in `attr(result, "arwad_fallback")`.
 
 ## Types
 

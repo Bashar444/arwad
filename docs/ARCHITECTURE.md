@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes how R-Goose is built and why. Decisions with lasting consequences are recorded separately as ADRs in [adr/](adr/).
+This document describes how Arwad is built and why. Decisions with lasting consequences are recorded separately as ADRs in [adr/](adr/).
 
 ## 1. Goals and non-goals
 
@@ -13,12 +13,12 @@ This document describes how R-Goose is built and why. Decisions with lasting con
 
 **Non-goals (for now)**
 
-- Changing the R language. R-Goose accepts R as written; it does not introduce new syntax before Phase 4.
+- Changing the R language. Arwad accepts R as written; it does not introduce new syntax before Phase 4.
 - Out-performing R on code that already spends its time inside optimised BLAS/LAPACK or C libraries. The gains are expected where R's interpreter and heap dominate: loops, resampling, element-wise work, many small allocations.
 
 ## 2. Two sets of constraints
 
-R-Goose sits between a very dynamic language and a deliberately restrictive one. The design follows from where they conflict.
+Arwad sits between a very dynamic language and a deliberately restrictive one. The design follows from where they conflict.
 
 | R requires | Goose provides or forbids |
 |---|---|
@@ -40,7 +40,7 @@ Goose is therefore an excellent target for **numerical kernels** (fixed-type vec
         │     Dynamic tier     │  closures, environments, promises, S3/S4,
         │  (GNU R, phases 1–3) │  eval, every CRAN package
         └──────────┬───────────┘
-                   │ rg_compile(f) / automatic hot-spot selection
+                   │ aw_compile(f) / automatic hot-spot selection
                    ▼
         ┌──────────────────────┐
         │     Static tier      │  typed IR → memory plan → Goose → C → native
@@ -54,7 +54,7 @@ The boundary is deliberately narrow: data crosses as contiguous numeric buffers,
 
 ### 4.1 Front end
 
-- **Phases 1–3:** R's own parser (`parse()` with `getParseData()`) produces the syntax tree, so R-Goose parses exactly what R parses at no cost.
+- **Phases 1–3:** R's own parser (`parse()` with `getParseData()`) produces the syntax tree, so Arwad parses exactly what R parses at no cost.
 - **Phase 4:** the standalone runtime needs its own parser. Candidate: [tree-sitter-r](https://github.com/r-lib/tree-sitter-r) (MIT), validated against R's parser on all CRAN sources.
 
 ### 4.2 Intermediate representation (RG-IR)
@@ -91,7 +91,7 @@ The emitter writes one Goose module per compilation unit, with `export fn` entry
 
 ### 4.7 Binding to R
 
-The R package `rgoose` loads compiled units and calls them through `.Call`:
+The R package `arwad` loads compiled units and calls them through `.Call`:
 
 - inputs: `REAL(x)` / `INTEGER(x)` / `LOGICAL(x)` with `XLENGTH(x)` passed as `{data, len}` slices, read without copying;
 - outputs: allocated by R (`allocVector`) and passed in as writable slices, so nothing is copied back;
@@ -105,7 +105,7 @@ Parallel resampling runs inside Goose: worker programs (`thread_fn`) receive fla
 
 ### 5.1 Phases 1–3: GNU R
 
-R-Goose ships as an R package (`library(rgoose)`). All of R and CRAN keeps working because nothing is replaced, and `rg_compile()` returns the original function, with the reason recorded, whenever it cannot compile it.
+Arwad ships as an R package (`library(arwad)`). All of R and CRAN keeps working because nothing is replaced, and `aw_compile()` returns the original function, with the reason recorded, whenever it cannot compile it.
 
 ### 5.2 Phase 4 onward: standalone runtime
 
@@ -120,7 +120,7 @@ The static tier is unchanged; it simply gains a second host.
 
 ## 6. Determinism and numerical equivalence
 
-- **Random numbers:** R's default generators (Mersenne-Twister; inversion for normals; rejection sampling for `sample()` since R 3.6.0) are re-implemented bit-for-bit, so `set.seed(n)` yields identical streams in R and R-Goose.
+- **Random numbers:** R's default generators (Mersenne-Twister; inversion for normals; rejection sampling for `sample()` since R 3.6.0) are re-implemented bit-for-bit, so `set.seed(n)` yields identical streams in R and Arwad.
 - **Floating point:** no fast-math. Reductions use a documented order. R accumulates `sum()` and `mean()` in `long double` (80-bit on x86-64 GCC builds, including R for Windows); the static tier matches that per back end, and back ends that cannot are flagged.
 - **Reference data:** equivalence suites include the NIST Statistical Reference Datasets for linear regression (Longley, Norris, Pontius, Filip, Wampler), whose certified values test ill-conditioned problems.
 
@@ -141,6 +141,6 @@ The static tier is unchanged; it simply gains a second host.
 - **FastR** (Oracle Labs, GraalVM) reached broad package compatibility through a C-API emulation layer but did not displace GNU R.
 - **Renjin** (JVM) compiled R, and even packages' C and Fortran code, to JVM bytecode; its development has since stalled.
 - **pqR** and **Riposte** showed large speed-ups on specific workloads through interpreter and vector-trace optimisations.
-- **Numba** and **JAX** in Python show the accelerator pattern R-Goose starts with: compile a well-defined subset, leave the rest to the host language.
+- **Numba** and **JAX** in Python show the accelerator pattern Arwad starts with: compile a well-defined subset, leave the rest to the host language.
 
-The lesson R-Goose takes from all of them: compatibility is the long tail, so deliver value through acceleration first and earn independence from GNU R measurably.
+The lesson Arwad takes from all of them: compatibility is the long tail, so deliver value through acceleration first and earn independence from GNU R measurably.
