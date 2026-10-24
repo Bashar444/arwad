@@ -37,3 +37,7 @@ Thumbs.db
 # Secrets
 .env
 .env.*
+
+# Build outputs of the proof of concept (regenerate with poc/build.sh)
+poc/*.o
+poc/tmp.def

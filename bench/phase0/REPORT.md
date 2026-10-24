@@ -1,6 +1,16 @@
 # Phase 0 spike report: OLS and case bootstrap, GNU R vs hand-written Goose
 
-**Date:** 24 October 2026 · **Status:** preliminary (single machine, non-optimising C back end) · **Verdict:** proceed, with the strategy adjusted as described in §5.
+**Date:** 24 October 2026 (updated the same day with an optimising back end and the R binding) · **Status:** preliminary, single laptop · **Verdict:** proceed.
+
+## Summary
+
+| Result | Value |
+|---|---|
+| Agreement with GNU R | within 8.5e-15 (standalone) and 3.7e-15 (single fit called from R); bootstrap SDs within 2.8e-15 |
+| 10,000-replicate bootstrap, called from R through `.Call` (gcc -O2) | **2.50 s vs 3.98 s for R's fastest loop (`.lm.fit`): 1.59× faster** |
+| Memory R allocates per 100 replicates | **0.4 MB with Goose vs 18.4 MB with the R loop** |
+| 10,000,000-step scalar loop | **≈ 20× faster than R** |
+| Same bootstrap with the non-optimising TinyCC back end | 2.9× slower than R (§4): the optimising back end matters |
 
 ## 1. What was tested
 
@@ -18,7 +28,7 @@ OLS on a fixed design (n = 1,000 rows, k = 10 coefficients including the interce
 | RAM / OS | 15.9 GB / Windows 11 Pro (build 26100) |
 | R | 4.6.0, internal reference BLAS |
 | Goose | v2026.3 (runtime 4d3da949e563), `goose run` with the bundled **TinyCC** back end, inlining levels -O1 and -O2 |
-| Optimising C compiler | **none installed**, so `goose build` (clang/MSVC -O2) could not be tested |
+| Optimising C compiler | none at first (§4 uses TinyCC); then **GCC 14.3.0 from Rtools45** (§4b, §4c) |
 
 ## 3. Numerical equivalence (gate: relative error ≤ 1e-9)
 
@@ -43,6 +53,34 @@ Produced by [`compare.R`](compare.R). The Goose results agree with GNU R to abou
 
 Run-to-run spread is large on this laptop (overheating has been recorded on this machine before), so medians are reported.
 
+### 4b. Optimising back end (added after installing Rtools45, GCC 14.3.0)
+
+`goose build -O2 --cc gcc` builds the same program with GCC at `-O2`.
+
+| Workload | Runs (s) | Median (s) | Relative to R |
+|---|---|---:|---|
+| Scalar loop (index generation) | 0.277, 0.264, 0.279 | **0.28** | ≈ 20× faster than R (5.58 s) |
+| 10,000 bootstrap refits | 3.39, 2.99, 3.21 | **3.21** | 1.14× faster than R's `.lm.fit` loop (3.66 s) |
+
+Outputs: `goose_gccO2_run1..3.txt`.
+
+### 4c. Called from R (Phase 0.4)
+
+The kernels in [`poc/rgoose_kernels.goose`](../../poc/rgoose_kernels.goose) are exported with `export fn`, compiled with `goose -O2 --standalone --header`, and linked into an R-loadable DLL by `R CMD SHLIB` through a small C bridge ([`poc/shim.c`](../../poc/shim.c)). R's matrices are passed to Goose as slices pointing at R's own memory; the result matrix is allocated by R and filled in by Goose. The bridge validates every index before the call, so bad input raises an R error instead of crashing R. Script: [`poc/run_poc.R`](../../poc/run_poc.R).
+
+| Contender (B = 10,000, n = 1,000, k = 10) | Runs (s) | Median (s) | Speed-up vs `.lm.fit` loop |
+|---|---|---:|---:|
+| R loop + `lm.fit` | 4.59, 3.97, 4.18 | 4.18 | 0.95× |
+| R loop + `.lm.fit` | 3.57, 3.98, 4.16 | 3.98 | 1.00× |
+| **Goose via one `.Call`** | 2.56, 2.50, 2.34 | **2.50** | **1.59×** |
+
+| Check | Result |
+|---|---|
+| Single fit vs `lm.fit` | max relative error 3.74e-15 |
+| Bootstrap coefficients vs the `lm.fit` loop | max relative error 5.78e-11 (the largest values come from coefficients near zero; absolute errors are at rounding level) |
+| Bootstrap standard deviations | max relative error 2.80e-15 |
+| R memory allocated per 100 replicates (`bench::mark`) | Goose 402.9 KB (almost all of it the test harness's `idx[, 1:100]` copy) vs `.lm.fit` loop 18.4 MB |
+
 ## 5. Interpretation
 
 1. **Feasibility for correctness is established.** A statistical kernel written in Goose reproduces GNU R to about 1e-14, with identical resampling streams.
@@ -50,12 +88,14 @@ Run-to-run spread is large on this laptop (overheating has been recorded on this
 3. **Where R already calls compiled Fortran, TinyCC-compiled Goose loses.** `.lm.fit` spends its time inside LINPACK compiled with an optimising compiler. A hand-written QR compiled by TinyCC is about three times slower. This is a comparison of C compilers, not of memory models.
 4. **Strategy adjustment:** do not compete with Fortran on dense floating-point work. Call BLAS/LAPACK from Goose through `extern fn` for factorisations (as [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5 already plans), and target the overheads R adds around them: per-iteration interpretation, allocation and copying (`X[ii, ]` allocates about 80 KB per replicate in R), and parallel execution through Goose's share-nothing workers.
 
+5. **Confirmed after §4b–4c:** with an optimising compiler, the same hand-written kernel beats R's best loop, and called from R it is 1.59× faster while allocating about 46 times less memory in R. Both sides perform the same QR arithmetic, so the gain is R's per-replicate interpretation, allocation and copying, which is exactly the overhead R-Goose is designed to remove.
+
 ## 6. Not yet measured
 
-- An optimising back end (`goose build` with clang or MSVC at -O2). Requires installing LLVM or Visual Studio Build Tools.
-- Peak memory of each process with a proper harness (Windows `PeakWorkingSet64`, Linux `/usr/bin/time -v`).
-- Calling the Goose kernel from inside R through `export fn` and `.Call` (Phase 0.4). Requires a C toolchain for R packages (Rtools on Windows).
-- Parallel resampling with Goose worker threads.
+- Parallel resampling with Goose worker threads (this laptop has 2 cores / 4 threads).
+- Factorisations through BLAS/LAPACK called from Goose, and faster bootstrap formulations (for example frequency-weighted cross-products instead of gathering rows).
+- Whole-process peak memory with a proper harness (Windows `PeakWorkingSet64`, Linux `/usr/bin/time -v`).
+- Other machines, and a Linux CI run.
 
 ## 7. Reproduce
 
@@ -63,4 +103,6 @@ Run-to-run spread is large on this laptop (overheating has been recorded on this
 Rscript bench/phase0/phase0_reference.R 10000
 goose run -O2 bench/phase0/ols_bootstrap.goose -- bench/phase0/data.csv 10000 > bench/phase0/goose_O2_run1.txt
 Rscript bench/phase0/compare.R bench/phase0/goose_O2_run1.txt
+goose build -O2 --cc gcc bench/phase0/ols_bootstrap.goose -o bench/phase0/ols_bootstrap.exe
+bash poc/build.sh && Rscript poc/run_poc.R 10000 3
 ```

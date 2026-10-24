@@ -1,0 +1,4 @@
+"contender","runs","median_s","speedup_vs_dot_lm_fit"
+"R loop + lm.fit","4.59, 3.97, 4.18",4.18,0.95
+"R loop + .lm.fit","3.57, 3.98, 4.16",3.98,1
+"Goose via .Call (gcc -O2)","2.56, 2.5, 2.34",2.5,1.59

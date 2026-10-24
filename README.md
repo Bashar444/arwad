@@ -2,7 +2,7 @@
 
 **A statistical programming language that keeps R's syntax and its package ecosystem, and compiles numerical work to native code with deterministic, garbage-collection-free memory.**
 
-> **Status:** Phase 0 in progress; first spike report in [bench/phase0/REPORT.md](bench/phase0/REPORT.md) (results equal to GNU R within 8.5e-15; a scalar loop about 17× faster than R; QR refits about 3× slower until an optimising C back end is installed) · private repository · MIT licence, effective on first public release
+> **Status:** Phase 0 in progress · [bench/phase0/REPORT.md](bench/phase0/REPORT.md): called from R, a Goose bootstrap kernel is **1.59× faster** than R's fastest loop, allocates **46× less** memory in R, and matches GNU R within 3.7e-15 · MIT licence
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 
 ## The idea
