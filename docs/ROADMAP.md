@@ -4,15 +4,15 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 
 ## Phase 0: Foundations (2–4 weeks)
 
-| # | Task | Output |
-|---|---|---|
-| 0.1 | Install Goose v2026.3 (Windows x64 locally, Linux x64 in CI); compile and run the bundled samples; record versions | `bench/phase0/ENVIRONMENT.md` |
-| 0.2 | Hand-write a Goose OLS kernel: Householder QR without pivoting for full-rank designs, returning coefficients, residual variance and standard errors | `kernels/ols.goose` |
-| 0.3 | Hand-write a nonparametric case bootstrap of the OLS coefficients: B = 10,000 resamples, n = 1,000 rows, k = 10 predictors. Resampling indices come from R's RNG and are passed in, so equivalence is not confounded by RNG differences | `kernels/bootstrap.goose` |
-| 0.4 | Bind both to R through a minimal C shim and `.Call`; confirm inputs are read without copying | `rgoose-poc/` |
-| 0.5 | Equivalence harness against `lm.fit`/`qr` and a pure-R bootstrap; report maximum absolute and relative error | `tests/equivalence/` |
-| 0.6 | Benchmark harness ([BENCHMARK_METHOD.md](BENCHMARK_METHOD.md)): pure R, byte-compiled R, Rcpp/RcppArmadillo, R-Goose; wall time and peak memory | `bench/phase0/` |
-| 0.7 | Report with raw data, whatever the result | `bench/phase0/REPORT.md` |
+| # | Task | Output | Status (24 Oct 2026) |
+|---|---|---|---|
+| 0.1 | Install Goose v2026.3 (Windows x64 locally, Linux x64 in CI); compile and run the bundled samples; record versions | `bench/phase0/REPORT.md` §2 | ✅ Windows, TinyCC back end |
+| 0.2 | Hand-write a Goose OLS kernel: Householder QR without pivoting for full-rank designs | `bench/phase0/ols_bootstrap.goose` | ✅ spike |
+| 0.3 | Hand-write a nonparametric case bootstrap: B = 10,000, n = 1,000, k = 10, with resampling indices identical to R's | `bench/phase0/ols_bootstrap.goose` | ✅ spike (shared LCG; R's own RNG in Phase 1) |
+| 0.4 | Bind both to R through a minimal C shim and `.Call`; confirm inputs are read without copying | `rgoose-poc/` | ⏳ needs a C toolchain (Rtools or LLVM) |
+| 0.5 | Equivalence harness; report maximum absolute and relative error | `bench/phase0/compare.R` | ✅ max relative error 8.5e-15 |
+| 0.6 | Benchmark harness ([BENCHMARK_METHOD.md](BENCHMARK_METHOD.md)): wall time and peak memory, including an optimising back end | `bench/phase0/` | ◐ timing done with TinyCC; optimising back end and memory pending |
+| 0.7 | Report with raw data, whatever the result | [`bench/phase0/REPORT.md`](../bench/phase0/REPORT.md) | ✅ preliminary |
 
 **Exit:** the report exists; equivalence is within 1e-9 relative error; a decision memo says *proceed*, *adjust* or *change back end*.
 
