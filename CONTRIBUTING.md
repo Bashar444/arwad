@@ -16,4 +16,4 @@ Arwad is in Phase 0 ([docs/ROADMAP.md](docs/ROADMAP.md)). These rules apply equa
 3. Open a pull request; a verifier from a different model family, or a different person, must approve it.
 4. The project lead merges.
 
-General conduct, security reporting and support follow the account-wide files in [Bashar444/.github](https://github.com/Bashar444/.github).
+General conduct, security reporting and support follow the account-wide files in [bashar-al-agha/.github](https://github.com/bashar-al-agha/.github).

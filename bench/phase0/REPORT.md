@@ -2,7 +2,7 @@
 
 **Date:** 24 October 2026 (updated the same day with an optimising back end and the R binding) · **Status:** preliminary, single laptop · **Verdict:** proceed.
 
-*Measured under the project's working title, R-Goose (commit `f00d17c`). The files and symbols were renamed for Arwad afterwards without changing the code; a re-run of the renamed build reproduced the same agreement with R (3.74e-15 single fit, 2.8e-15 bootstrap SDs).*
+*Measured under the project's working title, R-Goose (commit `da6cdb4`). The files and symbols were renamed for Arwad afterwards without changing the code; a re-run of the renamed build reproduced the same agreement with R (3.74e-15 single fit, 2.8e-15 bootstrap SDs).*
 
 ## Summary
 
