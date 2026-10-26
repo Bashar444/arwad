@@ -29,6 +29,12 @@ cases <- list(
                         args = list(0.5, 0, 1))
 )
 
+# One-off setup in a fresh cache: learning R's compiler commands and building
+# the Goose runtime object, timed with a trivial function.
+t0 <- proc.time()[["elapsed"]]
+invisible(aw_compile(function(x) x + 1)(1))
+cat(sprintf("one-off setup (fresh cache): %.2f s\n", proc.time()[["elapsed"]] - t0))
+
 rows <- list()
 for (nm in names(cases)) {
   cs <- cases[[nm]]

@@ -87,6 +87,7 @@ The emitter writes one Goose module per compilation unit, with `export fn` entry
 - Interactive use: Goose's bundled TinyCC backend compiles in-process with no external toolchain.
 - Production: clang, GCC or MSVC at `-O2`.
 - Each compiled unit is cached by a hash of (RG-IR, argument types, Goose version, C compiler and flags).
+- Phase 1 builds with R's own compile and link commands, read once from a dry run of `R CMD SHLIB`, and links one Goose runtime object, compiled once per toolchain, into every unit (about 1 s per unit on the Phase 0 laptop); `R CMD SHLIB` with a standalone unit is the fallback.
 - Because Goose compiles whole programs, each unit becomes its own small native library with its own `goose_init`; the binding layer keeps their symbols separate.
 
 ### 4.7 Binding to R
