@@ -20,7 +20,7 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 
 | # | Task | Status (26 Oct 2026) |
 |---|---|---|
-| 1.1 | `arwad` R package skeleton ([`r/`](../r/)) that passes `R CMD check` on Windows, Linux and macOS | ◐ passes on Windows; CI on all three ([`.github/workflows/r-check.yml`](../.github/workflows/r-check.yml)) |
+| 1.1 | `arwad` R package skeleton ([`r/`](../r/)) that passes `R CMD check` on Windows, Linux and macOS | ✅ Status OK on Linux, macOS (arm64) and Windows in CI, with Goose installed and the corpus compiled ([`.github/workflows/r-check.yml`](../.github/workflows/r-check.yml)) |
 | 1.2 | Front end, type inference and Goose emitter; content-hash cache | ◐ slice 1: scalars and vectors, one type per variable, guarded native execution ([ADR-0005](adr/0005-guarded-native-execution.md)); typed IR and memory planner pending |
 | 1.3 | `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason | ◐ slice 1 of the subset (see the status column in the spec) |
 | 1.4 | Build paths: an optimising C compiler (done, through `R CMD SHLIB`); a faster direct-compiler path with the Goose runtime compiled once; TinyCC for interactive use | ◐ first call 3.8–5.3 s per signature on the Phase 0 laptop; loops 14–35× faster than R's byte code ([bench/phase1/REPORT.md](../bench/phase1/REPORT.md)) |
