@@ -29,6 +29,16 @@
 - `1:0` is `c(1L, 0L)`; `for (i in seq_len(0))` runs zero times.
 - `sum()` and `mean()` accumulate as R does (in `long double` on x86-64 GCC builds).
 
+## Implementation status: compiler slice 1 (26 October 2026)
+
+Implemented in the `arwad` package ([`r/`](../r/)), verified by the corpus in [`r/inst/corpus/slice1.R`](../r/inst/corpus/slice1.R):
+
+- Types: double, integer and logical scalars and vectors (arguments without attributes, and local vectors from `numeric()`, `integer()`, `logical()`). One type per variable.
+- Constructs: everything listed above except matrices; `for` also runs over a vector variable (`for (v in x)`); `x[[i]]` reads; constant defaults.
+- Functions: `length`, `numeric`, `integer`, `logical`, `sum` (one argument), `abs`, `sqrt`, `exp`, `log` (one argument), `is.na` (scalars).
+- Semantics: all items in the section above, with these handled by re-running the call in GNU R ([ADR-0005](../docs/adr/0005-guarded-native-execution.md)): `NA` conditions, integer overflow, `NaN` from `sqrt()`/`log()`, zero, negative or `NA` indices where R would not return `NA`, fractional or `NA` loop bounds, and `%%`/`%/%` on doubles that are not whole numbers below 2^52.
+- Not yet: matrices, `%*%`, `t`, `crossprod`, `solve`, `mean`, `min`, `max`, vectorised arithmetic and recycling, `is.na` of vectors, logical indices, R's random-number generators. Each falls back with a recorded reason.
+
 ## Not in version 0 (falls back to R)
 
 Closures created inside the function, `...`, environments, `eval` / `quote` / `substitute`, S3 and S4 dispatch, lists, data frames, character vectors, factors, recursion, `tryCatch`, `on.exit`, side effects on global state.

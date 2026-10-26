@@ -8,7 +8,8 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-1E3A5F?style=flat-square"></a>
-  <a href="docs/ROADMAP.md"><img alt="Status: Phase 0" src="https://img.shields.io/badge/Status-Phase%200-A16207?style=flat-square"></a>
+  <a href="docs/ROADMAP.md"><img alt="Status: Phase 1" src="https://img.shields.io/badge/Status-Phase%201-A16207?style=flat-square"></a>
+  <a href="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml"><img alt="R-CMD-check" src="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml/badge.svg"></a>
   <a href="bench/phase0/REPORT.md"><img alt="Benchmark report" src="https://img.shields.io/badge/Benchmark-Phase%200%20report-1E3A5F?style=flat-square"></a>
   <a href="https://github.com/aardappel/goose"><img alt="Built on Goose" src="https://img.shields.io/badge/Built%20on-Goose%20v2026.3-1E3A5F?style=flat-square"></a>
   <a href="CITATION.cff"><img alt="Cite this repository" src="https://img.shields.io/badge/Cite-CITATION.cff-1E3A5F?style=flat-square"></a>
@@ -16,7 +17,7 @@
 
 **A statistical programming language that keeps R's syntax and its package ecosystem, and compiles numerical work to native code with deterministic, garbage-collection-free memory.**
 
-> **Status:** Phase 0 in progress · [bench/phase0/REPORT.md](bench/phase0/REPORT.md): called from R, a Goose bootstrap kernel is **1.59× faster** than R's fastest loop, allocates **46× less** memory in R, and matches GNU R within 3.7e-15 · MIT licence
+> **Status:** Phase 1 in progress · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **20–40× faster** than R's byte code on loops, results **bit-identical** to GNU R across a 38-function corpus, and slower for tiny one-off calls (34 µs dispatch) · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
 >
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 
@@ -76,9 +77,11 @@ Details, durations and dependencies: [docs/ROADMAP.md](docs/ROADMAP.md).
 | [docs/AGENT_TEAM.md](docs/AGENT_TEAM.md) | The ten builder–verifier duets and how they are run |
 | [docs/BENCHMARK_METHOD.md](docs/BENCHMARK_METHOD.md) | How performance is measured and reported |
 | [docs/adr/](docs/adr/) | Architecture decision records |
-| [spec/subset-v0.md](spec/subset-v0.md) | The R subset the Phase 1 compiler accepts |
+| [spec/subset-v0.md](spec/subset-v0.md) | The R subset the Phase 1 compiler accepts, with implementation status |
+| [r/](r/) | The `arwad` R package: `aw_compile()`, its tests, and the equivalence corpus |
 | [research/](research/) | CRAN census data and the script that produces it |
 | [bench/phase0/](bench/phase0/) | Phase 0 spike: R reference, Goose kernel, equivalence check, raw outputs and report |
+| [bench/phase1/](bench/phase1/) | Compiler slice 1 against GNU R's byte-compiled code: script, raw timings and report |
 
 ## Licence
 

@@ -14,15 +14,19 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 | 0.6 | Benchmark harness ([BENCHMARK_METHOD.md](BENCHMARK_METHOD.md)): wall time and peak memory, including an optimising back end | `bench/phase0/` | ◐ TinyCC and GCC -O2 timed; R-side memory measured; parallel and whole-process memory pending |
 | 0.7 | Report with raw data, whatever the result | [`bench/phase0/REPORT.md`](../bench/phase0/REPORT.md) | ✅ preliminary |
 
-**Exit:** the report exists; equivalence is within 1e-9 relative error; a decision memo says *proceed*, *adjust* or *change back end*.
+**Exit:** the report exists; equivalence is within 1e-9 relative error; a decision memo says *proceed*, *adjust* or *change back end*. **Met (24 Oct 2026):** the report's verdict is *proceed*, with the strategy adjustment in its §5 (call BLAS/LAPACK for dense work; target R's per-iteration overheads). Still open from 0.6: parallel workers and whole-process memory, now tracked under Phase 3 and Phase 1 respectively.
 
 ## Phase 1: Compiler vertical slice (2–4 months)
 
-- `arwad` R package skeleton that passes `R CMD check` on Windows, Linux and macOS.
-- Front end from R parse data to RG-IR; type and shape inference; memory planner; Goose emitter; TinyCC and clang build paths; content-hash cache.
-- `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason.
-- Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`).
-- Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test.
+| # | Task | Status (26 Oct 2026) |
+|---|---|---|
+| 1.1 | `arwad` R package skeleton ([`r/`](../r/)) that passes `R CMD check` on Windows, Linux and macOS | ◐ passes on Windows; CI on all three ([`.github/workflows/r-check.yml`](../.github/workflows/r-check.yml)) |
+| 1.2 | Front end, type inference and Goose emitter; content-hash cache | ◐ slice 1: scalars and vectors, one type per variable, guarded native execution ([ADR-0005](adr/0005-guarded-native-execution.md)); typed IR and memory planner pending |
+| 1.3 | `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason | ◐ slice 1 of the subset (see the status column in the spec) |
+| 1.4 | Build paths: an optimising C compiler (done, through `R CMD SHLIB`); a faster direct-compiler path with the Goose runtime compiled once; TinyCC for interactive use | ◐ first call 3.8–5.3 s per signature on the Phase 0 laptop; loops 20–40× faster than R's byte code ([bench/phase1/REPORT.md](../bench/phase1/REPORT.md)) |
+| 1.5 | Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`) | planned |
+| 1.6 | Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test | ◐ 38 functions ([`r/inst/corpus/slice1.R`](../r/inst/corpus/slice1.R)), all native and bit-identical to GNU R |
+| 1.7 | Slice 2: matrices and `m[i, j]`, vectorised arithmetic with recycling, `mean`/`min`/`max`, `c()`, `solve` through LAPACK | planned |
 
 **Exit:** every corpus function either compiles or falls back correctly; all compiled functions match GNU R within 1e-9; no memory errors under AddressSanitizer.
 
@@ -74,3 +78,4 @@ Data frames enter the static tier as column sets of known types.
 | Goose as the first native back end ([ADR-0002](adr/0002-goose-native-backend.md)) | |
 | MIT, DCO, clean room, no patent, the name Arwad ([ADR-0003](adr/0003-mit-licence-dco-clean-room.md)) | |
 | Numerical-equivalence gate ([ADR-0004](adr/0004-numerical-equivalence-gate.md)) | |
+| Guarded native execution with GNU R as the fallback ([ADR-0005](adr/0005-guarded-native-execution.md)) | |
