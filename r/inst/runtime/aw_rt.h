@@ -208,14 +208,21 @@ static int32_t aw_crossprod1(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
     return 0;
 }
 
-/* crossprod(x, y) = t(x) %*% y through dgemm. */
+/* crossprod(x, y) = t(x) %*% y: dgemv when either side is a single column
+ * (as R chooses; the routines round differently with optimised BLAS), dgemm
+ * otherwise. */
 static int32_t aw_crossprod2(sl_f64 x, int64_t nrx, int64_t ncx, sl_f64 y, int64_t nry, int64_t ncy, sl_f64 z)
 {
     if (nrx == 0 || ncx == 0 || nry == 0 || ncy == 0) { aw_zero_fill(z); return 0; }
     if (aw_unusual(x) || aw_unusual(y)) return 1;
-    int rx = (int) nrx, cx = (int) ncx, ry = (int) nry, cy = (int) ncy;
+    int rx = (int) nrx, cx = (int) ncx, ry = (int) nry, cy = (int) ncy, one_i = 1;
     double one = 1.0, zero = 0.0;
-    F77_CALL(dgemm)("T", "N", &cx, &cy, &rx, &one, x.data, &rx, y.data, &ry, &zero, z.data, &cx FCONE FCONE);
+    if (ncy == 1)
+        F77_CALL(dgemv)("T", &rx, &cx, &one, x.data, &rx, y.data, &one_i, &zero, z.data, &one_i FCONE);
+    else if (ncx == 1)
+        F77_CALL(dgemv)("T", &ry, &cy, &one, y.data, &ry, x.data, &one_i, &zero, z.data, &one_i FCONE);
+    else
+        F77_CALL(dgemm)("T", "N", &cx, &cy, &rx, &one, x.data, &rx, y.data, &ry, &zero, z.data, &cx FCONE FCONE);
     return 0;
 }
 

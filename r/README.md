@@ -2,7 +2,7 @@
 
 `aw_compile()` compiles an R function written in the statistical subset of R ([spec/subset-v0.md](../spec/subset-v0.md)) to native code through [Goose](https://github.com/aardappel/goose) and the C compiler R uses for packages, and keeps GNU R's results: whenever the native code meets a case it does not model, the call is re-run in GNU R ([ADR-0005](../docs/adr/0005-guarded-native-execution.md)).
 
-Status: Phase 1, compiler slices 1 and 2a: scalars and vectors with R's recycling, loops, indexing and logical masks, `mean`/`min`/`max`, and matrices, with `%*%`, `crossprod()` and `solve()` through R's own BLAS and LAPACK. Speed and limits are measured in [bench/phase1/REPORT.md](../bench/phase1/REPORT.md).
+Status: Phase 1, compiler slices 1 and 2: scalars and vectors with R's recycling, loops, indexing and logical masks, `mean`/`min`/`max`, and matrices, with `%*%`, `crossprod()` and `solve()` through R's own BLAS and LAPACK. Speed and limits are measured in [bench/phase1/REPORT.md](../bench/phase1/REPORT.md).
 
 ## Install
 
