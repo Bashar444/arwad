@@ -9,6 +9,9 @@ A <- matrix(stats::rnorm(12), 3, 4)
 B <- matrix(stats::rnorm(12), 3, 4)
 I3 <- matrix(sample(-9:9, 9, TRUE), 3, 3)
 L <- matrix(c(TRUE, FALSE, NA, TRUE), 2, 2)
+X <- cbind(1, matrix(stats::rnorm(150), 50, 3))
+yv <- as.vector(X %*% c(1, 2, -1, 0.5) + stats::rnorm(50, sd = 0.1))
+S <- matrix(c(4, 1, 0.5, 1, 3, 0.2, 0.5, 0.2, 2), 3, 3)
 
 list(
   mat_elementwise = list(
@@ -50,5 +53,32 @@ list(
     inputs = list(list(A), list(L), list(I3))),
   mat_vector_ops = list(
     f = function(m, v) m - v,
-    inputs = list(list(A, c(1, 2, 3)), list(A, 0.5), list(I3, 1:9)))
+    inputs = list(list(A, c(1, 2, 3)), list(A, 0.5), list(I3, 1:9))),
+  # Part 2: products and solve() through R's BLAS and LAPACK.
+  ols = list(
+    f = function(X, y) solve(crossprod(X), crossprod(X, y)),
+    inputs = list(list(X, yv), list(X[, 1:2], yv))),
+  ols_residuals = list(
+    f = function(X, y) { b <- solve(crossprod(X), crossprod(X, y)); y - X %*% b },
+    inputs = list(list(X, yv))),
+  ridge = list(
+    f = function(X, y, lambda) {
+      A <- crossprod(X)
+      for (j in seq_len(ncol(X))) A[j, j] <- A[j, j] + lambda
+      solve(A, crossprod(X, y))
+    },
+    inputs = list(list(X, yv, 0.5), list(X, yv, 10))),
+  matmul = list(
+    f = function(a, b) a %*% b,
+    inputs = list(list(A, t(B)), list(A, c(1, -1, 2, 0.5)), list(c(1, 2, 3), A), list(c(1, 2, 3), c(4, 5, 6)),
+                  list(I3, I3), list(t(A), A), list(matrix(1:3, 3, 1), matrix(4:6, 1, 3)))),
+  cross_one = list(
+    f = function(x) crossprod(x),
+    inputs = list(list(A), list(X), list(c(1, 2, 3)), list(I3))),
+  cross_two = list(
+    f = function(x, y) crossprod(x, y),
+    inputs = list(list(A, B), list(X, yv), list(c(1, 2, 3), A), list(A, c(1, 0, -1)))),
+  solve_forms = list(
+    f = function(a, b) c(solve(a, b), solve(a) %*% b),
+    inputs = list(list(S, c(1, 2, 3)), list(S, c(-1, 0.5, 4))))
 )

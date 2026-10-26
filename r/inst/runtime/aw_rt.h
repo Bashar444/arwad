@@ -99,6 +99,45 @@ static double aw_imean(sl_i32 x, double na)
     return (double) (s / x.len);
 }
 
+/* x + y and x * y with GNU R's NA or NaN, whichever operand order the C
+ * compiler picks for these commutative operations. When an operand is NaN,
+ * the result is the NaN the hardware returns for R's order (x, y): on arm64
+ * a signalling NaN (R stores NA_real_ as one) takes priority, otherwise the
+ * first NaN wins; it is quieted by setting the quiet bit, as the hardware
+ * does, which no optimiser can remove. */
+static double aw_quiet(double x)
+{
+    uint64_t u;
+    memcpy(&u, &x, sizeof u);
+    u |= UINT64_C(0x0008000000000000);
+    memcpy(&x, &u, sizeof u);
+    return x;
+}
+
+static double aw_nan_of(double x, double y)
+{
+#if defined(__aarch64__) || defined(_M_ARM64)
+    uint64_t ux, uy;
+    memcpy(&ux, &x, sizeof ux);
+    memcpy(&uy, &y, sizeof uy);
+    if (isnan(x) && !(ux & UINT64_C(0x0008000000000000))) return aw_quiet(x);
+    if (isnan(y) && !(uy & UINT64_C(0x0008000000000000))) return aw_quiet(y);
+#endif
+    return aw_quiet(isnan(x) ? x : y);
+}
+
+static double aw_dadd(double x, double y)
+{
+    double r = x + y;
+    return (isnan(x) || isnan(y)) ? aw_nan_of(x, y) : r;
+}
+
+static double aw_dmul(double x, double y)
+{
+    double r = x * y;
+    return (isnan(x) || isnan(y)) ? aw_nan_of(x, y) : r;
+}
+
 /* min() and max() of doubles (?Extremes): NA wins over NaN, NaN over
  * numbers, and of equal values (such as 0 and -0) the first is kept. */
 static double aw_rextreme(sl_f64 x, int32_t want_max)
@@ -116,6 +155,96 @@ static double aw_rextreme(sl_f64 x, int32_t want_max)
         }
     }
     return s;
+}
+
+/* ---- Matrix products and solve() through R's own BLAS and LAPACK ---------- */
+#define USE_FC_LEN_T
+#include <Rconfig.h>
+#include <R_ext/RS.h>
+#include <R_ext/BLAS.h>
+#include <R_ext/Lapack.h>
+#ifndef FCONE
+# define FCONE
+#endif
+
+/* R's default matrix product hands operands with NA, NaN, infinite values (or
+ * values whose sums overflow) to its own non-BLAS code; such calls are left
+ * to GNU R. The test here is wider than R's, which only costs a re-run. */
+static int aw_unusual(sl_f64 x)
+{
+    for (int64_t i = 0; i < x.len; i++) if (!(fabs(x.data[i]) <= 1e307)) return 1;
+    return 0;
+}
+
+static void aw_zero_fill(sl_f64 z) { for (int64_t i = 0; i < z.len; i++) z.data[i] = 0.0; }
+
+/* x (nrx by ncx) %*% y (nry by ncy) into z: dgemv for a matrix-vector or a
+ * vector-matrix product, dgemm otherwise. Returns 1 to leave the call to R. */
+static int32_t aw_matprod(sl_f64 x, int64_t nrx, int64_t ncx, sl_f64 y, int64_t nry, int64_t ncy, sl_f64 z)
+{
+    if (nrx == 0 || ncx == 0 || nry == 0 || ncy == 0) { aw_zero_fill(z); return 0; }
+    if (aw_unusual(x) || aw_unusual(y)) return 1;
+    int m = (int) nrx, k = (int) ncx, ry = (int) nry, n = (int) ncy, one_i = 1;
+    double one = 1.0, zero = 0.0;
+    if (ncy == 1)
+        F77_CALL(dgemv)("N", &m, &k, &one, x.data, &m, y.data, &one_i, &zero, z.data, &one_i FCONE);
+    else if (nrx == 1)
+        F77_CALL(dgemv)("T", &ry, &n, &one, y.data, &ry, x.data, &one_i, &zero, z.data, &one_i FCONE);
+    else
+        F77_CALL(dgemm)("N", "N", &m, &n, &k, &one, x.data, &m, y.data, &ry, &zero, z.data, &m FCONE FCONE);
+    return 0;
+}
+
+/* crossprod(x) (nc by nc): dsyrk on the upper triangle, mirrored. */
+static int32_t aw_crossprod1(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
+{
+    if (nr == 0 || nc == 0) { aw_zero_fill(z); return 0; }
+    if (aw_unusual(x)) return 1;
+    int r = (int) nr, c = (int) nc;
+    double one = 1.0, zero = 0.0;
+    F77_CALL(dsyrk)("U", "T", &c, &r, &one, x.data, &r, &zero, z.data, &c FCONE FCONE);
+    for (int i = 1; i < c; i++)
+        for (int j = 0; j < i; j++) z.data[i + (int64_t) c * j] = z.data[j + (int64_t) c * i];
+    return 0;
+}
+
+/* crossprod(x, y) = t(x) %*% y through dgemm. */
+static int32_t aw_crossprod2(sl_f64 x, int64_t nrx, int64_t ncx, sl_f64 y, int64_t nry, int64_t ncy, sl_f64 z)
+{
+    if (nrx == 0 || ncx == 0 || nry == 0 || ncy == 0) { aw_zero_fill(z); return 0; }
+    if (aw_unusual(x) || aw_unusual(y)) return 1;
+    int rx = (int) nrx, cx = (int) ncx, ry = (int) nry, cy = (int) ncy;
+    double one = 1.0, zero = 0.0;
+    F77_CALL(dgemm)("T", "N", &cx, &cy, &rx, &one, x.data, &rx, y.data, &ry, &zero, z.data, &cx FCONE FCONE);
+    return 0;
+}
+
+/* solve(a, b) for an n by n double matrix a: b (n by p) is overwritten with
+ * the solution by dgesv; the reciprocal condition number from dgecon must
+ * reach R's default tolerance, .Machine$double.eps. Returns 1 when GNU R
+ * would signal an error (singular or computationally singular). */
+static int32_t aw_solve(sl_f64 a, int64_t n, sl_f64 b, int64_t p)
+{
+    int nn = (int) n, pp = (int) p, info = 0;
+    double *lu = malloc((size_t) (n * n) * sizeof(double));
+    int *ipiv = malloc((size_t) n * sizeof(int));
+    double *work = malloc((size_t) (4 * n) * sizeof(double));
+    int32_t bad = (lu == NULL || ipiv == NULL || work == NULL);
+    if (!bad) {
+        memcpy(lu, a.data, (size_t) (n * n) * sizeof(double));
+        F77_CALL(dgesv)(&nn, &pp, lu, &nn, ipiv, b.data, &nn, &info);
+        if (info != 0) {
+            bad = 1;
+        } else {
+            double anorm = F77_CALL(dlange)("1", &nn, &nn, a.data, &nn, (double *) NULL FCONE), rcond = 0.0;
+            F77_CALL(dgecon)("1", &nn, lu, &nn, &anorm, &rcond, work, ipiv, &info FCONE);
+            if (rcond < DBL_EPSILON) bad = 1;
+        }
+    }
+    free(lu);
+    free(ipiv);
+    free(work);
+    return bad;
 }
 
 /* Called by the shim after the entry returns: hands over the result buffer. */

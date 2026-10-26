@@ -49,7 +49,7 @@ Verified by [`r/inst/corpus/slice2.R`](../r/inst/corpus/slice2.R) (20 functions;
 - Indexing with index vectors (`x[idx]`) and logical masks (`x[x > 0]`), and sub-assignment of a single value through either (`x[x < lo] <- lo`, `x[idx] <- v`).
 - Where R needs one value (`if`, `while`, `&&`, `||`, a length, the ends of `a:b`, `[[`), a vector of another length is left to GNU R.
 - `mean()` follows GNU R's algorithm: an extended-precision sum divided by n; when that sum is not finite (it may only have overflowed), the sum of the terms `x[i] / n`; then, when finite, a correction by the mean of the residuals. Its `NA` or `NaN` with mixed data therefore follows the hardware, as in R (an `NA` wins on x86-64; the first one wins on arm64). `min()` and `max()` follow `?Extremes` (NA before NaN, the first of equal values such as `0` and `-0`).
-- Compiled `+` and `*` return the first operand's `NA` or `NaN` quieted, as an arithmetic result is: R's `NA_real_` is stored as a signalling NaN, which arm64 hardware would otherwise favour.
+- Compiled `+` and `*` choose the result `NA` or `NaN` as the hardware does for R's operand order, whichever order the C compiler picks for these commutative operations: on arm64 a signalling NaN (R stores `NA_real_` as one) takes priority, otherwise the first NaN wins, quieted.
 
 ### Compiler slice 2b, part 1 (26 October 2026): matrices
 
@@ -59,7 +59,16 @@ Verified by [`r/inst/corpus/slice2b.R`](../r/inst/corpus/slice2b.R) (12 function
 - `m[i, j]` read and write, and `m[i, ]` and `m[, j]` read (dropping to vectors, as R's default).
 - Elementwise arithmetic, comparison, logic and math on matrices, with a scalar, a vector or a matrix of equal dimensions, keeping the dimensions.
 - Left to GNU R: non-conformable operands, subscripts out of bounds or `NA`, data that do not fill a matrix a whole number of times, and matrices with `dimnames` or other attributes.
-- Not yet: `%*%`, `crossprod`, `solve` (part 2, through R's own BLAS and LAPACK), vector subscripts of matrices, `byrow`.
+- Not yet: vector subscripts of matrices, `byrow`, `tcrossprod`, `diag`.
+
+### Compiler slice 2b, part 2 (26 October 2026): products and `solve()`
+
+Verified by the second half of [`r/inst/corpus/slice2b.R`](../r/inst/corpus/slice2b.R) (7 functions, among them OLS, its residuals and ridge regression; 79 functions in all):
+
+- `%*%` with matrices and vectors (a vector becomes a row or a column as `?matmult` describes; two vectors give their inner product), through R's own BLAS (`dgemv` for matrix-vector products, `dgemm` otherwise).
+- `crossprod(x)` (BLAS `dsyrk`) and `crossprod(x, y)` (`dgemm`), with vectors as columns.
+- `solve(a)` and `solve(a, b)` for a square double matrix: LAPACK `dgesv`, with the reciprocal condition number (`dgecon`) checked against R's default tolerance.
+- Left to GNU R: operands with `NA`, `NaN`, infinite or very large values (R's default matrix product then uses its own code), non-conformable operands, singular systems, integer or logical `a` in `solve()`, and two vectors of different lengths in `%*%`.
 
 ## Not in version 0 (falls back to R)
 

@@ -129,6 +129,128 @@ cx_dims <- function(cx, fn, v, e) {
   aw_val(t, "int")
 }
 
+# ---- Products and solve() through R's own BLAS and LAPACK (part 2) ---------
+
+# The data of an operand as an f64 array (R converts integer and logical
+# operands of matrix products to double).
+cx_dbl_data <- function(cx, v, e) {
+  if (v$type %in% c("null", "exit")) aw_unsupported("an operand without a value", e)
+  if (v$type == "dbl" && v$kind != "s") return(v$g)
+  cx_concat(cx, list(v), "dbl", e)
+}
+
+# Declares i64 variables holding the shape (rows, columns) of each operand.
+cx_shape_vars <- function(cx, n) {
+  vars <- replicate(n, cx_tmp(cx))
+  for (v in vars) cx_emit(cx, sprintf("var %s: i64 = 0;", v))
+  vars
+}
+
+# x %*% y. A vector operand becomes a row or a column as R's documentation
+# describes; two vectors give their inner product (other lengths are left
+# to R), and so do operands R would not conform.
+cx_matprod <- function(cx, x, y, e) {
+  xd <- cx_dbl_data(cx, x, e)
+  yd <- cx_dbl_data(cx, y, e)
+  s <- cx_shape_vars(cx, 4L)
+  nrx <- s[1]; ncx <- s[2]; nry <- s[3]; ncy <- s[4]
+  b <- cx_bail(cx, "non-conformable arguments", e)
+  lx <- cx_len(x)
+  ly <- cx_len(y)
+  if (x$kind == "m" && y$kind == "m") {
+    cx_emit(cx, sprintf("%s = %s; %s = %s; %s = %s; %s = %s;", nrx, x$nr, ncx, x$nc, nry, y$nr, ncy, y$nc))
+  } else if (x$kind == "m") {
+    cx_emit(cx, sprintf("%s = %s; %s = %s;", nrx, x$nr, ncx, x$nc))
+    cx_emit(cx, sprintf("if %s == %s { %s = %s; %s = 1; } else if %s == 1 { %s = 1; %s = %s; } else { %s }",
+                        ly, ncx, nry, ly, ncy, ncx, nry, ncy, ly, b))
+  } else if (y$kind == "m") {
+    cx_emit(cx, sprintf("%s = %s; %s = %s;", nry, y$nr, ncy, y$nc))
+    cx_emit(cx, sprintf("if %s == %s { %s = 1; %s = %s; } else if %s == 1 { %s = %s; %s = 1; } else { %s }",
+                        lx, nry, nrx, ncx, lx, nry, nrx, lx, ncx, b))
+  } else {
+    cx_emit(cx, sprintf("if %s != %s { %s }", lx, ly, b))
+    cx_emit(cx, sprintf("%s = 1; %s = %s; %s = %s; %s = 1;", nrx, ncx, lx, nry, ly, ncy))
+  }
+  cx_emit(cx, sprintf("if %s != %s { %s }", ncx, nry, b))
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", t, nrx, ncy))
+  cx_emit(cx, sprintf("if aw_matprod(%s, %s, %s, %s, %s, %s, %s) != 0 { %s }", xd, nrx, ncx, yd, nry, ncy, t,
+                      cx_bail(cx, "values R multiplies with its own code (NA, NaN, infinite or very large)", e)))
+  aw_val(t, "dbl", "m", nrx, ncy)
+}
+
+# crossprod(x) and crossprod(x, y) = t(x) %*% y; vectors are columns.
+cx_crossprod <- function(cx, x, y, e) {
+  xd <- cx_dbl_data(cx, x, e)
+  unusual <- "values R multiplies with its own code (NA, NaN, infinite or very large)"
+  s <- cx_shape_vars(cx, 4L)
+  nrx <- s[1]; ncx <- s[2]; nry <- s[3]; ncy <- s[4]
+  if (x$kind == "m") {
+    cx_emit(cx, sprintf("%s = %s; %s = %s;", nrx, x$nr, ncx, x$nc))
+  } else {
+    cx_emit(cx, sprintf("%s = %s; %s = 1;", nrx, cx_len(x), ncx))
+  }
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", t))
+  if (is.null(y)) {
+    cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", t, ncx, ncx))
+    cx_emit(cx, sprintf("if aw_crossprod1(%s, %s, %s, %s) != 0 { %s }", xd, nrx, ncx, t, cx_bail(cx, unusual, e)))
+    return(aw_val(t, "dbl", "m", ncx, ncx))
+  }
+  yd <- cx_dbl_data(cx, y, e)
+  b <- cx_bail(cx, "non-conformable arguments", e)
+  ly <- cx_len(y)
+  if (y$kind == "m") {
+    cx_emit(cx, sprintf("%s = %s; %s = %s;", nry, y$nr, ncy, y$nc))
+  } else if (x$kind == "m") {
+    cx_emit(cx, sprintf("if %s == %s { %s = %s; %s = 1; } else if %s == 1 { %s = 1; %s = %s; } else { %s }",
+                        ly, nrx, nry, ly, ncy, nrx, nry, ncy, ly, b))
+  } else {
+    cx_emit(cx, sprintf("%s = %s; %s = 1;", nry, ly, ncy))
+  }
+  cx_emit(cx, sprintf("if %s != %s { %s }", nrx, nry, b))
+  cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", t, ncx, ncy))
+  cx_emit(cx, sprintf("if aw_crossprod2(%s, %s, %s, %s, %s, %s, %s) != 0 { %s }", xd, nrx, ncx, yd, nry, ncy, t,
+                      cx_bail(cx, unusual, e)))
+  aw_val(t, "dbl", "m", ncx, ncy)
+}
+
+# solve(a) and solve(a, b) for a square double matrix a, as R's default
+# method: LAPACK dgesv, with the condition-number check; singular systems
+# (an error in R) are left to GNU R.
+cx_solve <- function(cx, a, b, e) {
+  if (a$kind != "m") aw_unsupported("solve() of a value that is not a matrix", e)
+  if (a$type != "dbl") aw_unsupported("solve() of an integer or logical matrix is left to R", e)
+  bad <- cx_bail(cx, "a matrix that is not square or is empty, or a right-hand side that does not fit", e)
+  cx_emit(cx, sprintf("if %s != %s || %s == 0 { %s }", a$nr, a$nc, a$nr, bad))
+  n <- a$nr
+  out <- cx_tmp(cx)
+  k <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", out))
+  if (is.null(b)) {
+    p <- n
+    kind <- "m"
+    cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", out, n, n))
+    cx_emit(cx, sprintf("for %s in 0..%s { %s[%s * %s + %s] = 1.0; }", k, n, out, k, n, k))
+  } else {
+    bd <- cx_dbl_data(cx, b, e)
+    if (b$kind == "m") {
+      p <- b$nc
+      kind <- "m"
+      cx_emit(cx, sprintf("if %s != %s || %s == 0 { %s }", b$nr, n, b$nc, bad))
+    } else {
+      p <- "1"
+      kind <- "v"
+      cx_emit(cx, sprintf("if %s != %s { %s }", cx_len(b), n, bad))
+    }
+    cx_emit(cx, sprintf("%s.append(%s);", out, bd))
+  }
+  cx_emit(cx, sprintf("if aw_solve(%s, %s, %s, %s) != 0 { %s }", a$g, n, out, p,
+                      cx_bail(cx, "a singular or computationally singular system (R errors)", e)))
+  if (kind == "m") aw_val(out, "dbl", "m", n, p) else aw_val(out, "dbl", "v")
+}
+
 # t(): a matrix transposed; a vector or a scalar becomes one row.
 cx_transpose <- function(cx, v, e) {
   if (v$type %in% c("null", "exit")) aw_unsupported("t() of no value", e)

@@ -1,3 +1,14 @@
+# arwad 0.0.0.9004
+
+* Compiler slice 2b, part 2: `%*%`, `crossprod()` and `solve()` through R's
+  own BLAS (`dgemv`, `dgemm`, `dsyrk`) and LAPACK (`dgesv`, `dgecon`), so
+  OLS as `solve(crossprod(X), crossprod(X, y))` compiles and matches R bit
+  for bit. Units now link `$(LAPACK_LIBS) $(BLAS_LIBS)`.
+* Compiled `+` and `*` select the result NaN in C as each platform's
+  hardware does for R's operand order (arm64 favours signalling NaNs); the
+  earlier `x + 0.0` quieting was optimised away by clang.
+* Corpus: 79 functions.
+
 # arwad 0.0.0.9003
 
 * Compiler slice 2b, part 1, matrices: matrix arguments and locals,

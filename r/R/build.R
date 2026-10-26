@@ -8,7 +8,8 @@
 aw_state <- new.env(parent = emptyenv())
 
 # -ffp-contract=off: no fused multiply-add, so each operation rounds as R's do.
-aw_makevars <- c("PKG_CFLAGS = -ffp-contract=off", "PKG_LIBS = -lm")
+# R's own LAPACK and BLAS, as packages link them, for %*%, crossprod() and solve().
+aw_makevars <- c("PKG_CFLAGS = -ffp-contract=off", "PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) -lm")
 
 #' Find the Goose toolchain
 #'
@@ -190,7 +191,7 @@ aw_cc_probe <- function() {
   comp <- trimws(sub("-c probe.c -o probe.o", "", comp[1L], fixed = TRUE))
   if (.Platform$OS.type == "windows") {
     # R's Windows rule builds an export list around the link; this is its core.
-    link <- sprintf('%s -shared -o @OUT@ @OBJ@ -L"%s" -lR', sub(" .*", "", comp), R.home("bin"))
+    link <- sprintf('%s -shared -o @OUT@ @OBJ@ -L"%s" -lRlapack -lRblas -lR', sub(" .*", "", comp), R.home("bin"))
   } else {
     # R's rule wraps the link in `if test ...; then echo <link>; <link>; fi`.
     link <- trimws(grep(paste("-o", lib), out, fixed = TRUE, value = TRUE))

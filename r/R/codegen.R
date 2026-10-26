@@ -910,6 +910,15 @@ aw_gen <- function(cx, e, want = TRUE) {
     "matrix" = cx_matrix(cx, aw_match_args(a, c("data", "nrow", "ncol")), e),
     "nrow" = , "ncol" = , "dim" = cx_dims(cx, nm, aw_gen(cx, a[[1L]]), e),
     "t" = cx_transpose(cx, aw_gen(cx, a[[1L]]), e),
+    "%*%" = cx_matprod(cx, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e),
+    "crossprod" = {
+      m <- aw_match_args(a, c("x", "y"))
+      cx_crossprod(cx, aw_gen(cx, m$x), if (!is.null(m$y)) aw_gen(cx, m$y), e)
+    },
+    "solve" = {
+      m <- aw_match_args(a, c("a", "b"))
+      cx_solve(cx, aw_gen(cx, m$a), if (!is.null(m$b)) aw_gen(cx, m$b), e)
+    },
     aw_unsupported(sprintf("internal: no code generation for `%s`", nm), e)
   )
 }
@@ -922,10 +931,16 @@ aw_rt_externs <- c(
   "extern fn aw_ret_int1(x: i32);",
   "extern fn aw_ret_lgl1(x: i32);",
   "extern fn aw_ret_null();",
+  "extern fn aw_matprod(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, z: f64[:]) -> i32;",
+  "extern fn aw_crossprod1(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
+  "extern fn aw_crossprod2(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, z: f64[:]) -> i32;",
+  "extern fn aw_solve(a: const f64[:], n: i64, b: f64[:], p: i64) -> i32;",
   "extern fn aw_ret_dblm(x: const f64[:], nr: i64, nc: i64);",
   "extern fn aw_ret_intm(x: const i32[:], nr: i64, nc: i64);",
   "extern fn aw_ret_lglm(x: const i32[:], nr: i64, nc: i64);",
   "extern fn aw_rsum(x: const f64[:]) -> f64;",
+  "extern fn aw_dadd(x: f64, y: f64) -> f64;",
+  "extern fn aw_dmul(x: f64, y: f64) -> f64;",
   "extern fn aw_rmean(x: const f64[:]) -> f64;",
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
   "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
@@ -985,12 +1000,6 @@ aw_codegen <- function(info, f, types, label) {
     aw_rt_externs,
     "",
     "fn aw_isnan(x: f64) -> bool { x != x }",
-    "// x + y and x * y keep the first operand's NA or NaN, as GNU R's arithmetic",
-    "// does, whichever operand order the C compiler picks for these commutative ops;",
-    "// x + 0.0 returns it quieted, as an arithmetic result is (arm64 favours",
-    "// signalling NaNs, and R's NA_real_ is stored as one).",
-    "fn aw_dadd(x: f64, y: f64) -> f64 { if x != x { x + 0.0 } else { x + y } }",
-    "fn aw_dmul(x: f64, y: f64) -> f64 { if x != x { x + 0.0 } else { x * y } }",
     "",
     sprintf('export "aw_entry_@H@" fn aw_entry(%s) -> i32 {', paste(params, collapse = ", ")),
     "    let na_i: i32 = -2147483647 - 1;",

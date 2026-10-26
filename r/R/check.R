@@ -27,6 +27,7 @@ aw_arity <- list(
   "!" = 1L, "&" = 2L, "|" = 2L, "&&" = 2L, "||" = 2L,
   "[" = 2:3, "[[" = 2:3, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
   "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
+  "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
   "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L,
   "c" = c(1L, Inf), "mean" = 1L, "min" = c(1L, Inf), "max" = c(1L, Inf)
@@ -35,7 +36,8 @@ aw_arity <- list(
 # Argument names R users write for these, accepted when given by name.
 aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
                     seq_len = "length.out", seq_along = "along.with",
-                    matrix = c("data", "nrow", "ncol"))
+                    matrix = c("data", "nrow", "ncol"), crossprod = c("x", "y"),
+                    solve = c("a", "b"))
 
 # Arguments of a call in the order of `formals`, matching exact names first
 # and then positions, as R does (partial names are not accepted).
@@ -55,7 +57,7 @@ aw_match_args <- function(args, formals) {
 aw_planned <- c(
   "<<-" = "superassignment `<<-` changes the enclosing environment",
   "function" = "functions defined inside the function (closures)",
-  "matrix" = "matrices are planned for slice 2", "%*%" = "matrices are planned for slice 2",
+  "tcrossprod" = "tcrossprod() is planned for a later slice", "diag" = "diag() is planned for a later slice",
   "seq" = "seq() is planned for slice 2",
   "rnorm" = "random numbers are planned for late Phase 1 (bit-exact RNG)",
   "runif" = "random numbers are planned for late Phase 1 (bit-exact RNG)",

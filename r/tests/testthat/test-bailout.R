@@ -83,6 +83,20 @@ test_that("matrix cases that R warns or errors about are left to R", {
   expect_identical(add(named, named), named + named)
 })
 
+test_that("products and solve() leave R's special cases to R", {
+  skip_if_no_toolchain()
+  mm <- aw_compile(function(a, b) a %*% b)
+  a <- matrix(c(1, 2, 3, 4), 2)
+  expect_identical(mm(a, a), a %*% a)
+  withna <- matrix(c(1, NA, 3, 4), 2)
+  expect_identical(mm(withna, a), withna %*% a)
+  expect_error(mm(a, matrix(1:6, 3)), "non-conformable arguments")
+  sv <- aw_compile(function(a) solve(a))
+  expect_identical(sv(a), solve(a))
+  expect_error(sv(matrix(c(1, 2, 2, 4), 2)), "singular")
+  expect_identical(sum(aw_stats(mm)$bailouts), 2L)
+})
+
 test_that("seq_len() of a negative number gives R's error", {
   skip_if_no_toolchain()
   g <- aw_compile(function(n) { s <- 0L; for (i in seq_len(n)) s <- s + 1L; s })
