@@ -1,3 +1,11 @@
+# arwad 0.0.0.9007
+
+* Corpus grown to 201 functions (Phase 1 target: 200): `slice4.R` and
+  `slice5.R` add statistics, estimators, numerical methods, finance and
+  time series, linear algebra (IRLS logistic regression, Jacobi, LU), rank
+  statistics, integer algorithms and simulation (bootstrap, permutation
+  tests, Gibbs, Metropolis). All run natively and match GNU R bit for bit.
+
 # arwad 0.0.0.9006
 
 * `sample()` and `sample.int()` with and without replacement, drawing

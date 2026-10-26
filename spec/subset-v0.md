@@ -81,6 +81,10 @@ Verified by [`r/inst/corpus/slice3.R`](../r/inst/corpus/slice3.R) (7 functions, 
 - `sample(x, size, replace)` and `sample.int(n, size, replace)`: indices from R's own `R_unif_index()` (so `RNGkind(sample.kind = ...)` is honoured), drawn directly with replacement or for fewer than two draws, otherwise from a shrinking pool, as R does. Left to GNU R: `prob`, a single number given to `sample()` where R samples `1:x` from a vector argument, and R's errors (a sample larger than the population without replacement, an `NA` `replace`).
 - Not yet: `set.seed()` inside a compiled function, other distributions.
 
+### Equivalence corpus (26 October 2026): 201 functions
+
+[`r/inst/corpus/`](../r/inst/corpus/) `slice1.R` to `slice5.R` hold 201 functions, beyond the Phase 1 target of 200: the slices above, plus statistics, estimators, numerical methods, finance and time series, linear algebra (IRLS logistic regression, Jacobi, LU), rank statistics, integer algorithms and simulation. Every one runs natively and matches GNU R bit for bit on Linux, macOS and Windows; seeded ones also match `.Random.seed`.
+
 ## Not in version 0 (falls back to R)
 
 Closures created inside the function, `...`, environments, `eval` / `quote` / `substitute`, S3 and S4 dispatch, lists, data frames, character vectors, factors, recursion, `tryCatch`, `on.exit`, side effects on global state.
