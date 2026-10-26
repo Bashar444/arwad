@@ -60,3 +60,46 @@ jobs:
           working-directory: r
           args: 'c("--no-manual", "--as-cran")'
           error-on: '"error"'
+
+  # Phase 1 exit criterion: no memory errors under AddressSanitizer. Every
+  # compiled unit (and the Goose runtime) is built with -fsanitize=address and
+  # the whole test suite, the 201-function corpus included, runs in an R
+  # process with the sanitizer runtime preloaded; the first error fails the job.
+  asan:
+    name: AddressSanitizer (ubuntu-latest)
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      ARWAD_EXTRA_CFLAGS: -fsanitize=address -fno-omit-frame-pointer
+      ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:abort_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: any::testthat
+          needs: check
+
+      - name: Install Goose v2026.3
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/goose" && cd "$RUNNER_TEMP/goose"
+          curl -fsSL -o goose.tar.gz "https://github.com/aardappel/goose/releases/download/v2026.3/goose-v2026.3-linux-x64.tar.gz"
+          tar -xzf goose.tar.gz
+          exe=$(find "$RUNNER_TEMP/goose" -type f -name goose | head -n 1)
+          chmod +x "$exe"
+          echo "ARWAD_GOOSE=$exe" >> "$GITHUB_ENV"
+
+      - name: Install arwad
+        run: R CMD INSTALL r
+
+      - name: Run the tests with every unit built under AddressSanitizer
+        shell: bash
+        run: |
+          export LD_PRELOAD="$(gcc -print-file-name=libasan.so)"
+          Rscript -e 'library(testthat); library(arwad); test_dir("r/tests/testthat", reporter = "summary", stop_on_failure = TRUE)'

@@ -70,10 +70,16 @@ aw_hash <- function(text) {
   substr(unname(tools::md5sum(f)), 1L, 16L)
 }
 
+# Extra compile and link flags for every unit and the Goose runtime, such as
+# "-fsanitize=address -fno-omit-frame-pointer" for the AddressSanitizer run.
+aw_extra_cflags <- function() Sys.getenv("ARWAD_EXTRA_CFLAGS", getOption("arwad.cflags", ""))
+
 aw_run <- function(cmd, args, dir) {
   owd <- setwd(dir)
   on.exit(setwd(owd))
-  out <- tryCatch(suppressWarnings(system2(cmd, args, stdout = TRUE, stderr = TRUE)),
+  # A sanitizer runtime preloaded into R is not for the compilers R starts.
+  env <- if (.Platform$OS.type == "unix" && nzchar(Sys.getenv("LD_PRELOAD"))) "LD_PRELOAD=" else character()
+  out <- tryCatch(suppressWarnings(system2(cmd, args, stdout = TRUE, stderr = TRUE, env = env)),
                   error = function(e) structure(conditionMessage(e), status = 127L))
   status <- attr(out, "status")
   list(ok = is.null(status) || identical(as.integer(status), 0L), out = out)
@@ -90,7 +96,7 @@ aw_tail_lines <- function(out, n = 8L) {
 aw_build <- function(code, tc) {
   rt <- system.file("runtime", "aw_rt.h", package = "arwad", mustWork = TRUE)
   key <- c(code$goose, code$shim, readLines(rt), tc$version, R.version.string,
-           R.version$platform, aw_makevars, as.character(utils::packageVersion("arwad")))
+           R.version$platform, aw_makevars, aw_extra_cflags(), as.character(utils::packageVersion("arwad")))
   h <- aw_hash(key)
   goose <- gsub("@H@", h, code$goose, fixed = TRUE)
   shim <- gsub("@H@", h, code$shim, fixed = TRUE)
@@ -173,6 +179,11 @@ aw_cc <- function() {
       dir.create(root, recursive = TRUE, showWarnings = FALSE)
       saveRDS(cc, rds)
     }
+  }
+  extra <- aw_extra_cflags()
+  if (is.list(cc) && nzchar(extra)) {
+    cc$compile <- paste(cc$compile, extra)
+    cc$link <- paste(cc$link, extra)
   }
   aw_state$cc <- cc
   cc
