@@ -43,7 +43,7 @@ attr(aw_compile(function(x) paste(x, "!")), "arwad_fallback")
 
 ## Guarantees and limits
 
-- Results, errors and warnings are GNU R's: the 38-function corpus in [`inst/corpus/slice1.R`](inst/corpus/slice1.R) is checked bit for bit (`identical(..., num.eq = FALSE)`), including `NA`, `NaN`, `-0` and visibility.
+- Results, errors and warnings are GNU R's: the 39-function corpus in [`inst/corpus/slice1.R`](inst/corpus/slice1.R) is checked bit for bit (`identical(..., num.eq = FALSE)`), including `NA`, `NaN`, `-0` and visibility.
 - The first call for each argument signature builds a native library (4–5 s on the Phase 0 laptop, mostly `R CMD SHLIB` overhead); later calls and later sessions reuse it from the cache in `tools::R_user_dir("arwad", "cache")`.
-- Each call pays an R-level dispatch cost (about 34 µs), so tiny functions are slower than in R; the gain is in loops (20–40× against R's byte code in [the report](../bench/phase1/REPORT.md)).
+- Each call pays an R-level dispatch cost (about 33 µs), so tiny functions are slower than in R; the gain is in loops (14–35× against R's byte code in [the report](../bench/phase1/REPORT.md)).
 - Arguments are evaluated on entry rather than lazily, and a running compiled loop cannot be interrupted.

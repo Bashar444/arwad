@@ -137,5 +137,8 @@ list(
     inputs = c(lgl_pairs, list(list(0.5, 0), list(NaN, 1)))),
   constants = list(
     f = function(x) { if (x > pi) T else F },
-    inputs = list(list(3), list(4)))
+    inputs = list(list(3), list(4))),
+  na_meets_nan = list(
+    f = function(a, b) { s <- a + b; s * b },
+    inputs = list(list(NA_real_, NaN), list(NA_real_, 1), list(NaN, 2), list(1, NA_real_)))
 )

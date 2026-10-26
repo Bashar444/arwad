@@ -288,6 +288,8 @@ cx_arith <- function(cx, op, a, b, e) {
   db <- cx_as(cx, b, "dbl")$g
   if (op == "^") {
     cx_emit(cx, sprintf("let %s: f64 = aw_r_pow(%s, %s);", t, da, db))
+  } else if (op %in% c("+", "*")) {
+    cx_emit(cx, sprintf("let %s: f64 = aw_d%s(%s, %s);", t, if (op == "+") "add" else "mul", da, db))
   } else {
     cx_emit(cx, sprintf("let %s: f64 = %s %s %s;", t, da, op, db))
   }
@@ -670,6 +672,10 @@ aw_codegen <- function(info, f, types, label) {
     aw_rt_externs,
     "",
     "fn aw_isnan(x: f64) -> bool { x != x }",
+    "// x + y and x * y keep the first operand's NA or NaN, as GNU R's arithmetic",
+    "// does, whichever operand order the C compiler picks for these commutative ops.",
+    "fn aw_dadd(x: f64, y: f64) -> f64 { if x != x { x } else { x + y } }",
+    "fn aw_dmul(x: f64, y: f64) -> f64 { if x != x { x } else { x * y } }",
     "",
     sprintf('export "aw_entry_@H@" fn aw_entry(%s) -> i32 {', paste(params, collapse = ", ")),
     "    let na_i: i32 = -2147483647 - 1;",

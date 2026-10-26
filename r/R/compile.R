@@ -71,6 +71,11 @@ aw_compile <- function(f, name = NULL) {
 
 aw_tcode <- c(double = "dbl", integer = "int", logical = "lgl")
 
+# Native units are built at run time, so their routines cannot be registered
+# with the package; calling through an alias keeps R CMD check from trying to
+# resolve a symbol that exists only after a build.
+aw_dotcall <- .Call
+
 # The signature key of one call: a type and a kind ("s" scalar, "v" vector)
 # per argument. A key starting with "!" names an argument that cannot be
 # compiled.
@@ -143,7 +148,7 @@ aw_dispatch <- function(st, ...) {
   sp$calls <- sp$calls + 1L
   names(args) <- st$info$formals
   if (!sp$ok) return(do.call(st$f, args))
-  res <- .Call(sp$sym, args)
+  res <- aw_dotcall(sp$sym, args)
   s <- res[[1L]]
   if (s == 0L) return(res[[2L]])
   if (s == 1L) return(invisible(res[[2L]]))
