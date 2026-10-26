@@ -8,7 +8,8 @@
 #' Options: `arwad.goose` (path to the `goose` executable), `arwad.cache_dir`
 #' (where built libraries are cached; by default
 #' `tools::R_user_dir("arwad", "cache")`), `arwad.verbose` (report each
-#' native build).
+#' native build), `arwad.build` (`"shlib"` to build every unit through
+#' `R CMD SHLIB` instead of calling R's compiler directly).
 #'
 #' @keywords internal
 "_PACKAGE"

@@ -15,7 +15,8 @@ the generated Goose, and \code{\link[=aw_toolchain]{aw_toolchain()}} to check th
 Options: \code{arwad.goose} (path to the \code{goose} executable), \code{arwad.cache_dir}
 (where built libraries are cached; by default
 \code{tools::R_user_dir("arwad", "cache")}), \code{arwad.verbose} (report each
-native build).
+native build), \code{arwad.build} (\code{"shlib"} to build every unit through
+\verb{R CMD SHLIB} instead of calling R's compiler directly).
 }
 \seealso{
 Useful links:

@@ -28,7 +28,8 @@ Results match GNU R. Whenever the native code meets a case it does not
 model (an \code{NA} condition, integer overflow, \code{sqrt()} of a negative number,
 a zero index), the call is re-run in GNU R, so errors, warnings and results
 are exactly R's. Functions outside the subset are returned unchanged, with
-the reason in \code{attr(result, "arwad_fallback")}.
+the reason in \code{attr(result, "arwad_fallback")}; primitives such as \code{sum}
+are returned as they are, being native code already.
 
 Arguments are evaluated when the compiled function is called (R evaluates
 them lazily), and long-running compiled loops cannot be interrupted.

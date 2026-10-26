@@ -698,7 +698,8 @@ aw_shim <- function(info, types) {
   for (i in seq_len(n)) {
     ty <- types[[i]]
     get <- c(get, sprintf("    SEXP a%d = VECTOR_ELT(args, %d);", i, i - 1L),
-             sprintf("    aw_check_arg(a%d, %s, %d);", i, aw_sexp[[ty$type]], as.integer(ty$kind == "s")))
+             sprintf("    if (!aw_arg_ok(a%d, %s, %d)) return ScalarInteger(-1);", i, aw_sexp[[ty$type]],
+                     as.integer(ty$kind == "s")))
     if (ty$kind == "s") {
       pass <- c(pass, sprintf("%s(a%d)[0]", aw_cptr[[ty$type]], i))
     } else {
@@ -713,17 +714,27 @@ aw_shim <- function(info, types) {
     "#include <stdint.h>",
     "#include <stdlib.h>",
     "#include <string.h>",
+    "#include <limits.h>",
     "#include <R.h>",
     "#include <Rinternals.h>",
+    "#include <Rversion.h>",
     '#include "unit.h"',
+    "",
+    "#if R_VERSION >= R_Version(4, 5, 0)",
+    "#define AW_HAS_ATTRIB(a) ANY_ATTRIB(a)",
+    "#else",
+    "#define AW_HAS_ATTRIB(a) (ATTRIB(a) != R_NilValue)",
+    "#endif",
     "",
     "int aw_res_take(void **buf, int64_t *len);",
     "static int aw_ready = 0;",
     "",
-    "static void aw_check_arg(SEXP a, SEXPTYPE type, int scalar)",
+    "/* Does an argument fit this unit's signature? If not, the call returns -1",
+    "   and the dispatcher looks up (or builds) the unit that fits. */",
+    "static int aw_arg_ok(SEXP a, SEXPTYPE type, int scalar)",
     "{",
-    "    if (TYPEOF(a) != type || (scalar && XLENGTH(a) != 1))",
-    '        error("arwad: an argument does not match the compiled signature");',
+    "    if (TYPEOF(a) != type || AW_HAS_ATTRIB(a) || XLENGTH(a) > INT_MAX) return 0;",
+    "    return !scalar || XLENGTH(a) == 1;",
     "}",
     "",
     "SEXP aw_call_@H@(SEXP args)",

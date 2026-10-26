@@ -136,24 +136,48 @@ aw_specialise <- function(st, key) {
   sp$hash <- b$hash
   sp$cached <- b$cached
   sp$seconds <- b$seconds
+  sp$method <- b$method
   sp$ok <- TRUE
   sp
 }
 
 aw_dispatch <- function(st, ...) {
+  # Fast path: the native unit of the last native call checks the argument
+  # types itself and returns -1 when they do not fit.
+  sp <- st$last
+  if (!is.null(sp)) {
+    res <- aw_dotcall(sp$sym, list(...))
+    s <- res[[1L]]
+    if (s >= 0L) {
+      sp$calls <- sp$calls + 1L
+      if (s == 0L) return(res[[2L]])
+      if (s == 1L) return(invisible(res[[2L]]))
+      return(aw_bailout(st, sp, s, list(...)))
+    }
+  }
   args <- list(...)
   key <- aw_signature(st, args)
   sp <- get0(key, envir = st$specs, inherits = FALSE)
   if (is.null(sp)) sp <- aw_specialise(st, key)
   sp$calls <- sp$calls + 1L
-  names(args) <- st$info$formals
-  if (!sp$ok) return(do.call(st$f, args))
+  if (!sp$ok) {
+    names(args) <- st$info$formals
+    return(do.call(st$f, args))
+  }
+  st$last <- sp
   res <- aw_dotcall(sp$sym, args)
   s <- res[[1L]]
   if (s == 0L) return(res[[2L]])
   if (s == 1L) return(invisible(res[[2L]]))
+  aw_bailout(st, sp, s, args)
+}
+
+# The native code met a case it does not model: count it, and run the call
+# in GNU R.
+aw_bailout <- function(st, sp, s, args) {
   why <- sp$bails[s - 1L]
   sp$bailouts[why] <- if (is.na(sp$bailouts[why])) 1L else sp$bailouts[why] + 1L
+  names(args) <- st$info$formals
   do.call(st$f, args)
 }
 
@@ -179,7 +203,7 @@ aw_explain <- function(g) {
   rows <- lapply(specs, function(sp) {
     nb <- sum(sp$bailouts)
     if (sp$ok) {
-      how <- sprintf("native (%s)", if (isTRUE(sp$cached)) "from cache" else sprintf("built in %.1f s", sp$seconds))
+      how <- sprintf("native (%s)", if (isTRUE(sp$cached)) "from cache" else sprintf("built in %.1f s, %s", sp$seconds, sp$method))
     } else {
       how <- paste("GNU R:", sp$reason)
     }

@@ -13,6 +13,17 @@ test_that("every corpus function runs natively and matches GNU R bit for bit", {
   }
 })
 
+test_that("calls switch between native units by argument type", {
+  skip_if_no_toolchain()
+  f <- function(x) { s <- 0; for (v in x) s <- s + v; s }
+  g <- aw_compile(f)
+  for (a in list(1:3, c(1.5, 2), 1:3, c(TRUE, NA), c(a = 1, b = 2), 7)) expect_identical(g(a), f(a))
+  s <- aw_stats(g)
+  expect_setequal(s$signature[s$native], c("int[]", "dbl[]", "lgl[]"))
+  expect_identical(sum(!s$native), 1L)
+  expect_identical(sum(s$calls), 6L)
+})
+
 test_that("a compiled function does not change its caller's vector", {
   skip_if_no_toolchain()
   g <- aw_compile(function(x) { x[1] <- 100; x })
