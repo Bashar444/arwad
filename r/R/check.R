@@ -27,7 +27,8 @@ aw_arity <- list(
   "!" = 1L, "&" = 2L, "|" = 2L, "&&" = 2L, "||" = 2L,
   "[" = 2L, "[[" = 2L, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
-  "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L
+  "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L,
+  "c" = c(1L, Inf), "mean" = 1L, "min" = c(1L, Inf), "max" = c(1L, Inf)
 )
 
 # Argument names R users write for these, accepted when given by name.
@@ -38,10 +39,8 @@ aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
 aw_planned <- c(
   "<<-" = "superassignment `<<-` changes the enclosing environment",
   "function" = "functions defined inside the function (closures)",
-  "c" = "c() builds a vector from parts; planned for slice 2",
   "matrix" = "matrices are planned for slice 2", "%*%" = "matrices are planned for slice 2",
-  "mean" = "mean() is planned for slice 2", "min" = "min() is planned for slice 2",
-  "max" = "max() is planned for slice 2", "seq" = "seq() is planned for slice 2",
+  "seq" = "seq() is planned for slice 2",
   "rnorm" = "random numbers are planned for late Phase 1 (bit-exact RNG)",
   "runif" = "random numbers are planned for late Phase 1 (bit-exact RNG)",
   "sample" = "random numbers are planned for late Phase 1 (bit-exact RNG)",
@@ -164,8 +163,6 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
     ok <- an[nzchar(an)] %in% aw_argnames[[nm]]
     if (!all(ok) || n != 1L) aw_unsupported("a named argument", e)
   }
-  if (nm %in% c(":", "seq_len", "seq_along") && !in_for_seq)
-    aw_unsupported(sprintf("`%s` outside a for-loop header builds a vector; planned for slice 2", nm), e)
   s$calls <- c(s$calls, nm)
 
   switch(nm,
@@ -254,10 +251,6 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
       s$vec <- c(s$vec, as.character(args[[1L]]))
       for (a in args) defs <- aw_walk(a, defs, s)
       defs
-    },
-    "seq_along" = {
-      if (!is.symbol(args[[1L]])) aw_unsupported("seq_along() of a computed value", e)
-      aw_walk(args[[1L]], defs, s)
     },
     {
       for (a in args) defs <- aw_walk(a, defs, s)

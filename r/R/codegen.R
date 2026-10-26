@@ -21,7 +21,10 @@ aw_val <- function(g, type, kind = "s") list(g = g, type = type, kind = kind)
 aw_tdesc <- function(v) paste(aw_tname[[v$type]], if (v$kind == "s") "scalar" else "vector")
 
 cx_emit <- function(cx, ...) {
-  cx$lines <- c(cx$lines, paste0(strrep("    ", cx$ind), ...))
+  # Build the line first: building it may emit lines of its own (a conversion
+  # inside the text), which must come before it.
+  line <- paste0(strrep("    ", cx$ind), ...)
+  cx$lines <- c(cx$lines, line)
 }
 
 cx_open <- function(cx, head) {
@@ -62,7 +65,7 @@ cx_var_new <- function(cx, nm, type, kind, init = NULL) {
 
 cx_scalar <- function(v, e) {
   if (v$type %in% c("null", "exit")) aw_unsupported("an expression without a value used as a value", e)
-  if (v$kind != "s") aw_unsupported("vectorised operations are planned for slice 2", e)
+  if (v$kind != "s") aw_unsupported("a vector where subset v0 needs a single value", e)
   v
 }
 
@@ -91,14 +94,14 @@ cx_lgl <- function(cx, v, e) {
 }
 
 cx_cond <- function(cx, e) {
-  l <- cx_lgl(cx, aw_gen(cx, e), e)
+  l <- cx_lgl(cx, cx_scalarize(cx, aw_gen(cx, e), e), e)
   cx_emit(cx, sprintf("if %s == na_i { %s }", l, cx_bail(cx, "an NA condition", e)))
   l
 }
 
 # A count for numeric(n) or seq_len(n): a non-negative whole number.
 cx_count <- function(cx, v, e) {
-  cx_scalar(v, e)
+  v <- cx_scalar(cx_scalarize(cx, v, e), e)
   t <- cx_tmp(cx)
   b <- cx_bail(cx, "a length that is NA, negative, fractional or too large", e)
   if (v$type == "dbl") {
@@ -114,7 +117,7 @@ cx_count <- function(cx, v, e) {
 # An end of a:b as an i64; GNU R takes over unless it is a whole number in
 # integer range (only then is a:b an integer sequence).
 cx_colon_end <- function(cx, v, e) {
-  cx_scalar(v, e)
+  v <- cx_scalar(cx_scalarize(cx, v, e), e)
   t <- cx_tmp(cx)
   b <- cx_bail(cx, "an end of a:b that is NA, fractional or beyond integer range", e)
   if (v$type == "dbl") {
@@ -212,15 +215,22 @@ cx_index_read <- function(cx, x, i, strict, e) {
 
 cx_index_write <- function(cx, nm, i, v, e) {
   var <- get0(nm, envir = cx$vars, inherits = FALSE)
-  if (var$kind != "v") aw_unsupported(sprintf("sub-assignment into the scalar '%s' is planned for slice 2", nm), e)
-  cx_scalar(i, e)
-  if (i$type == "lgl") aw_unsupported("logical indices are planned for slice 2", e)
-  if (v$kind != "s") aw_unsupported("assigning a vector into x[i] is planned for slice 2", e)
+  if (var$kind != "v") aw_unsupported(sprintf("sub-assignment into the scalar '%s' is planned for a later slice", nm), e)
+  if (v$kind != "s") aw_unsupported("assigning a vector into x[i] is planned for a later slice", e)
   cx_scalar(v, e)
   if (aw_rank[[v$type]] > aw_rank[[var$type]])
     aw_unsupported(sprintf("assigning a %s into '%s' would change it from %s to %s; subset v0 keeps one type per variable",
                            aw_tname[[v$type]], nm, aw_tname[[var$type]], aw_tname[[v$type]]), e)
   cv <- cx_as(cx, v, var$type)
+  if (i$type %in% c("null", "exit")) aw_unsupported("an index without a value", e)
+  if (i$type == "lgl") {
+    cx_write_mask(cx, var, i, cv$g, e)
+    return(v)
+  }
+  if (i$kind == "v") {
+    cx_write_gather(cx, var, i, cv$g, e)
+    return(v)
+  }
   k <- cx_tmp(cx)
   b <- cx_bail(cx, "a sub-assignment index that is NA, zero, negative or very large", e)
   if (i$type == "int") {
@@ -354,6 +364,291 @@ cx_sum <- function(cx, v, e) {
   aw_val(t, "int")
 }
 
+# ---- Vectors (slice 2) -------------------------------------------------------
+
+# R's result type of an operation on operands of these types.
+aw_result_type <- function(op, ta, tb = ta) {
+  if (op %in% c("==", "!=", "<", "<=", ">", ">=", "&", "|", "!", "is.na")) return("lgl")
+  if (op %in% c("/", "^", "sqrt", "exp", "log")) return("dbl")
+  if (ta != "dbl" && tb != "dbl") "int" else "dbl"
+}
+
+cx_len <- function(v) if (v$kind == "v") paste0(v$g, ".len") else "1"
+
+# A vector where R needs one value (if, while, &&, a length): GNU R takes over
+# unless it has exactly one element.
+cx_scalarize <- function(cx, v, e) {
+  if (v$kind == "s" || v$type %in% c("null", "exit")) return(v)
+  cx_emit(cx, sprintf("if %s.len != 1 { %s }", v$g, cx_bail(cx, "a vector of length other than one where R needs one value", e)))
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("let %s: %s = %s[0];", t, aw_g[[v$type]], v$g))
+  aw_val(t, v$type)
+}
+
+# Runs a scalar lowering `f` element by element, recycling the shorter operand
+# as R does; GNU R takes over when the lengths are not multiples (R warns).
+cx_elementwise <- function(cx, vals, rtype, e, f) {
+  for (v in vals) if (v$type %in% c("null", "exit")) aw_unsupported("an expression without a value used as a value", e)
+  vec <- which(vapply(vals, function(v) v$kind == "v", logical(1)))
+  n <- cx_tmp(cx)
+  lens <- vapply(vals, cx_len, "")
+  if (length(vec) == 1L) {
+    cx_emit(cx, sprintf("let %s: i64 = %s;", n, lens[vec]))
+  } else {
+    la <- lens[vec[1L]]
+    lb <- lens[vec[2L]]
+    cx_emit(cx, sprintf("let %s: i64 = if %s == 0 || %s == 0 { 0 } else if %s > %s { %s } else { %s };", n, la, lb, la, lb, la, lb))
+    cx_emit(cx, sprintf("if %s > 0 && (%s %% %s != 0 || %s %% %s != 0) { %s }", n, n, la, n, lb,
+                        cx_bail(cx, "lengths that are not multiples of each other (R warns)", e)))
+  }
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: %s[>..] = [];", t, aw_g[[rtype]]))
+  cx_emit(cx, sprintf("%s.resize(%s, %s);", t, n, aw_zero[[rtype]]))
+  pos <- character(length(vals))
+  for (i in vec) {
+    if (length(vec) > 1L) {
+      pos[i] <- cx_tmp(cx)
+      cx_emit(cx, sprintf("var %s: i64 = 0;", pos[i]))
+    }
+  }
+  k <- cx_tmp(cx)
+  cx_open(cx, sprintf("for %s in 0..%s", k, n))
+  xs <- lapply(seq_along(vals), function(i) {
+    v <- vals[[i]]
+    if (v$kind == "s") return(v)
+    el <- cx_tmp(cx)
+    cx_emit(cx, sprintf("let %s: %s = %s[%s];", el, aw_g[[v$type]], v$g, if (nzchar(pos[i])) pos[i] else k))
+    aw_val(el, v$type)
+  })
+  r <- cx_as(cx, f(xs), rtype)
+  cx_emit(cx, sprintf("%s[%s] = %s;", t, k, r$g))
+  for (i in vec) {
+    if (nzchar(pos[i])) cx_emit(cx, sprintf("%s += 1; if %s == %s { %s = 0; }", pos[i], pos[i], lens[i], pos[i]))
+  }
+  cx_close(cx)
+  aw_val(t, rtype, "v")
+}
+
+cx_binop <- function(cx, op, a, b, e) {
+  f <- if (op %in% c("==", "!=", "<", "<=", ">", ">=")) cx_compare else if (op %in% c("&", "|")) cx_andor else cx_arith
+  if (a$kind == "s" && b$kind == "s") return(f(cx, op, a, b, e))
+  cx_elementwise(cx, list(a, b), aw_result_type(op, a$type, b$type), e, function(x) f(cx, op, x[[1L]], x[[2L]], e))
+}
+
+cx_unary <- function(cx, op, v, e) {
+  if (v$kind == "s") return(cx_unary1(cx, op, v, e))
+  cx_elementwise(cx, list(v), aw_result_type(op, v$type), e, function(x) cx_unary1(cx, op, x[[1L]], e))
+}
+
+cx_unary1 <- function(cx, op, v, e) {
+  cx_scalar(v, e)
+  if (op == "+") return(aw_val(v$g, if (v$type == "lgl") "int" else v$type))
+  if (op %in% c("sqrt", "exp", "log", "abs")) return(cx_math(cx, op, v, e))
+  t <- cx_tmp(cx)
+  if (op == "-") {
+    if (v$type == "dbl") {
+      cx_emit(cx, sprintf("let %s: f64 = -%s;", t, v$g))
+      return(aw_val(t, "dbl"))
+    }
+    cx_emit(cx, sprintf("let %s: i32 = if %s == na_i { na_i } else { -%s };", t, v$g, v$g))
+    return(aw_val(t, "int"))
+  }
+  if (op == "!") {
+    l <- cx_lgl(cx, v, e)
+    cx_emit(cx, sprintf("let %s: i32 = if %s == na_i { na_i } else if %s == 0 { 1 } else { 0 };", t, l, l))
+    return(aw_val(t, "lgl"))
+  }
+  test <- if (v$type == "dbl") sprintf("aw_isnan(%s)", v$g) else sprintf("%s == na_i", v$g)
+  cx_emit(cx, sprintf("let %s: i32 = if %s { 1 } else { 0 };", t, test))
+  aw_val(t, "lgl")
+}
+
+cx_andor <- function(cx, op, a, b, e) {
+  x <- cx_lgl(cx, a, e)
+  y <- cx_lgl(cx, b, e)
+  t <- cx_tmp(cx)
+  if (op == "&") {
+    cx_emit(cx, sprintf("let %s: i32 = if %s == 0 || %s == 0 { 0 } else if %s == na_i || %s == na_i { na_i } else { 1 };", t, x, y, x, y))
+  } else {
+    cx_emit(cx, sprintf("let %s: i32 = if %s == 1 || %s == 1 { 1 } else if %s == na_i || %s == na_i { na_i } else { 0 };", t, x, y, x, y))
+  }
+  aw_val(t, "lgl")
+}
+
+# Element `k` of a vector or scalar value, for reading.
+cx_elt <- function(v, k) if (v$kind == "v") sprintf("%s[%s]", v$g, k) else v$g
+
+# The values of several operands, concatenated into one array of `type`.
+cx_concat <- function(cx, vals, type, e) {
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: %s[>..] = [];", t, aw_g[[type]]))
+  for (v in vals) {
+    if (v$type %in% c("null", "exit")) aw_unsupported("an expression without a value used as a value", e)
+    if (v$kind == "s") {
+      cx_emit(cx, sprintf("%s.resize(%s.len + 1, %s);", t, t, cx_as(cx, v, type)$g))
+    } else if (aw_g[[v$type]] == aw_g[[type]]) {
+      cx_emit(cx, sprintf("%s.append(%s);", t, v$g))
+    } else {
+      base <- cx_tmp(cx)
+      k <- cx_tmp(cx)
+      cx_emit(cx, sprintf("let %s: i64 = %s.len;", base, t))
+      cx_emit(cx, sprintf("%s.resize(%s + %s.len, 0.0);", t, base, v$g))
+      cx_emit(cx, sprintf("for %s in 0..%s.len { %s[%s + %s] = if %s[%s] == na_i { na_real } else { %s[%s] }; }",
+                          k, v$g, t, base, k, v$g, k, v$g, k))
+    }
+  }
+  t
+}
+
+cx_c <- function(cx, vals, e) {
+  types <- vapply(vals, function(v) v$type, "")
+  if (any(types %in% c("null", "exit"))) aw_unsupported("an expression without a value used as a value", e)
+  type <- names(aw_rank)[max(aw_rank[types])]
+  aw_val(cx_concat(cx, vals, type, e), type, "v")
+}
+
+cx_mean <- function(cx, v, e) {
+  if (v$type %in% c("null", "exit")) aw_unsupported("mean() of no value", e)
+  arr <- if (v$kind == "v") v$g else cx_concat(cx, list(v), v$type, e)
+  t <- cx_tmp(cx)
+  if (v$type == "dbl") {
+    cx_emit(cx, sprintf("let %s: f64 = aw_rmean(%s);", t, arr))
+  } else {
+    cx_emit(cx, sprintf("let %s: f64 = aw_imean(%s, na_real);", t, arr))
+  }
+  aw_val(t, "dbl")
+}
+
+cx_extreme <- function(cx, op, vals, e) {
+  types <- vapply(vals, function(v) v$type, "")
+  type <- if (any(types == "dbl")) "dbl" else "int"
+  arr <- cx_concat(cx, vals, type, e)
+  cx_emit(cx, sprintf("if %s.len == 0 { %s }", arr, cx_bail(cx, "min() or max() of nothing (R warns)", e)))
+  t <- cx_tmp(cx)
+  if (type == "dbl") {
+    cx_emit(cx, sprintf("let %s: f64 = aw_rextreme(%s, %d);", t, arr, as.integer(op == "max")))
+  } else {
+    k <- cx_tmp(cx)
+    cx_emit(cx, sprintf("var %s: i32 = %s[0];", t, arr))
+    cx_open(cx, sprintf("if %s != na_i", t))
+    cx_open(cx, sprintf("for %s in 1..%s.len", k, arr))
+    cx_emit(cx, sprintf("if %s[%s] == na_i { %s = na_i; break; }", arr, k, t))
+    cx_emit(cx, sprintf("if %s[%s] %s %s { %s = %s[%s]; }", arr, k, if (op == "max") ">" else "<", t, t, arr, k))
+    cx_close(cx)
+    cx_close(cx)
+  }
+  aw_val(t, type)
+}
+
+# a:b, seq_len(n) and seq_along(x) as integer vectors.
+cx_seq_value <- function(cx, e) {
+  h <- cx_head(e)
+  t <- cx_tmp(cx)
+  k <- cx_tmp(cx)
+  if (h == ":") {
+    fr <- cx_colon_end(cx, aw_gen(cx, e[[2L]]), e)
+    to <- cx_colon_end(cx, aw_gen(cx, e[[3L]]), e)
+    cnt <- cx_tmp(cx)
+    cx_emit(cx, sprintf("let %s: i64 = if %s <= %s { %s - %s + 1 } else { %s - %s + 1 };", cnt, fr, to, to, fr, fr, to))
+    val <- sprintf("(if %s <= %s { %s + %s } else { %s - %s }) as i32", fr, to, fr, k, fr, k)
+  } else {
+    cnt <- if (h == "seq_len") cx_count(cx, aw_gen(cx, e[[2L]]), e) else cx_len(aw_gen(cx, e[[2L]]))
+    val <- sprintf("(%s + 1) as i32", k)
+  }
+  cx_emit(cx, sprintf("var %s: i32[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s, 0);", t, cnt))
+  cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = %s; }", k, cnt, t, k, val))
+  aw_val(t, "int", "v")
+}
+
+# x[i] for an integer or double index vector: NA or beyond the end gives NA;
+# GNU R takes over for zero or negative indices.
+cx_read_gather <- function(cx, x, i, e) {
+  t <- cx_tmp(cx)
+  k <- cx_tmp(cx)
+  p <- cx_tmp(cx)
+  b <- cx_bail(cx, "a zero or negative index", e)
+  cx_emit(cx, sprintf("var %s: %s[>..] = [];", t, aw_g[[x$type]]))
+  cx_emit(cx, sprintf("%s.resize(%s.len, %s);", t, i$g, aw_na[[x$type]]))
+  cx_open(cx, sprintf("for %s in 0..%s.len", k, i$g))
+  if (i$type == "int") {
+    cx_open(cx, sprintf("if %s[%s] != na_i", i$g, k))
+    cx_emit(cx, sprintf("if %s[%s] < 1 { %s }", i$g, k, b))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s];", p, i$g, k))
+  } else {
+    cx_open(cx, sprintf("if !aw_isnan(%s[%s]) && %s[%s] < %s", i$g, k, i$g, k, aw_big))
+    cx_emit(cx, sprintf("if %s[%s] < 1.0 { %s }", i$g, k, b))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s] as i64;", p, i$g, k))
+  }
+  cx_emit(cx, sprintf("if %s <= %s { %s[%s] = %s; }", p, cx_len(x), t, k, cx_elt(x, paste0(p, " - 1"))))
+  cx_close(cx)
+  cx_close(cx)
+  aw_val(t, x$type, "v")
+}
+
+# x[mask] for a logical mask, recycled over x; NA in the mask gives NA.
+cx_read_mask <- function(cx, x, i, e) {
+  lx <- cx_len(x)
+  li <- cx_len(i)
+  cx_emit(cx, sprintf("if %s > %s { %s }", li, lx, cx_bail(cx, "a logical index longer than the vector", e)))
+  cnt <- cx_tmp(cx); c1 <- cx_tmp(cx); k <- cx_tmp(cx); t <- cx_tmp(cx); p <- cx_tmp(cx); m <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: i64 = 0;", cnt))
+  cx_emit(cx, sprintf("var %s: i64 = 0;", c1))
+  cx_emit(cx, sprintf("var %s: i64 = 0;", p))
+  cx_open(cx, sprintf("if %s > 0", li))
+  cx_emit(cx, sprintf("for %s in 0..%s { if %s != 0 { %s += 1; } %s += 1; if %s == %s { %s = 0; } }",
+                      k, lx, cx_elt(i, c1), cnt, c1, c1, li, c1))
+  cx_close(cx)
+  cx_emit(cx, sprintf("var %s: %s[>..] = [];", t, aw_g[[x$type]]))
+  cx_emit(cx, sprintf("%s.resize(%s, %s);", t, cnt, aw_na[[x$type]]))
+  cx_emit(cx, sprintf("%s = 0;", c1))
+  cx_open(cx, sprintf("if %s > 0", li))
+  cx_open(cx, sprintf("for %s in 0..%s", k, lx))
+  cx_emit(cx, sprintf("let %s: i32 = %s;", m, cx_elt(i, c1)))
+  cx_emit(cx, sprintf("if %s == 1 { %s[%s] = %s; %s += 1; } else if %s == na_i { %s += 1; }", m, t, p, cx_elt(x, k), p, m, p))
+  cx_emit(cx, sprintf("%s += 1; if %s == %s { %s = 0; }", c1, c1, li, c1))
+  cx_close(cx)
+  cx_close(cx)
+  aw_val(t, x$type, "v")
+}
+
+# x[mask] <- v: set the elements where the recycled mask is TRUE.
+cx_write_mask <- function(cx, var, i, cv, e) {
+  li <- cx_len(i)
+  c1 <- cx_tmp(cx)
+  k <- cx_tmp(cx)
+  cx_emit(cx, sprintf("if %s > %s.len { %s }", li, var$g, cx_bail(cx, "a logical index longer than the vector", e)))
+  cx_emit(cx, sprintf("var %s: i64 = 0;", c1))
+  cx_open(cx, sprintf("if %s > 0", li))
+  cx_open(cx, sprintf("for %s in 0..%s.len", k, var$g))
+  cx_emit(cx, sprintf("if %s == 1 { %s[%s] = %s; }", cx_elt(i, c1), var$g, k, cv))
+  cx_emit(cx, sprintf("%s += 1; if %s == %s { %s = 0; }", c1, c1, li, c1))
+  cx_close(cx)
+  cx_close(cx)
+}
+
+# x[idx] <- v for an index vector: NA and zero indices are skipped, as R does
+# with a single value; GNU R takes over for negative indices.
+cx_write_gather <- function(cx, var, i, cv, e) {
+  k <- cx_tmp(cx)
+  p <- cx_tmp(cx)
+  b <- cx_bail(cx, "a negative or very large sub-assignment index", e)
+  cx_open(cx, sprintf("for %s in 0..%s.len", k, i$g))
+  if (i$type == "int") {
+    cx_open(cx, sprintf("if %s[%s] != na_i && %s[%s] != 0", i$g, k, i$g, k))
+    cx_emit(cx, sprintf("if %s[%s] < 0 { %s }", i$g, k, b))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s];", p, i$g, k))
+  } else {
+    cx_open(cx, sprintf("if !aw_isnan(%s[%s]) && !(%s[%s] > -1.0 && %s[%s] < 1.0)", i$g, k, i$g, k, i$g, k))
+    cx_emit(cx, sprintf("if !(%s[%s] >= 1.0 && %s[%s] < 2147483648.0) { %s }", i$g, k, i$g, k, b))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s] as i64;", p, i$g, k))
+  }
+  cx_emit(cx, sprintf("if %s > %s.len { %s.resize(%s, %s); }", p, var$g, var$g, p, aw_na[[var$type]]))
+  cx_emit(cx, sprintf("%s[%s - 1] = %s;", var$g, p, cv))
+  cx_close(cx)
+  cx_close(cx)
+}
+
 cx_return <- function(cx, v, visible) {
   if (v$type == "exit") return(invisible())
   if (v$type == "null") {
@@ -441,6 +736,7 @@ aw_gen <- function(cx, e, want = TRUE) {
       }
       v <- aw_gen(cx, a[[2L]])
       i <- aw_gen(cx, tgt[[3L]])
+      if (cx_head(tgt) == "[[") i <- cx_scalarize(cx, i, e)
       cx_index_write(cx, as.character(tgt[[2L]]), i, v, e)
     },
     "if" = {
@@ -547,52 +843,39 @@ aw_gen <- function(cx, e, want = TRUE) {
       aw_val("", "exit")
     },
     "+" = , "-" = {
-      if (length(a) == 2L) return(cx_arith(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e))
-      v <- cx_scalar(aw_gen(cx, a[[1L]]), e)
-      if (nm == "+") return(aw_val(v$g, if (v$type == "lgl") "int" else v$type))
-      t <- cx_tmp(cx)
-      if (v$type == "dbl") {
-        cx_emit(cx, sprintf("let %s: f64 = -%s;", t, v$g))
-        return(aw_val(t, "dbl"))
-      }
-      cx_emit(cx, sprintf("let %s: i32 = if %s == na_i { na_i } else { -%s };", t, v$g, v$g))
-      aw_val(t, "int")
+      if (length(a) == 2L) return(cx_binop(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e))
+      cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e)
     },
-    "*" = , "/" = , "^" = , "%%" = , "%/%" = cx_arith(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e),
-    "==" = , "!=" = , "<" = , "<=" = , ">" = , ">=" = cx_compare(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e),
-    "!" = {
-      l <- cx_lgl(cx, aw_gen(cx, a[[1L]]), e)
-      t <- cx_tmp(cx)
-      cx_emit(cx, sprintf("let %s: i32 = if %s == na_i { na_i } else if %s == 0 { 1 } else { 0 };", t, l, l))
-      aw_val(t, "lgl")
-    },
-    "&" = , "|" = {
-      x <- cx_lgl(cx, aw_gen(cx, a[[1L]]), e)
-      y <- cx_lgl(cx, aw_gen(cx, a[[2L]]), e)
-      t <- cx_tmp(cx)
-      if (nm == "&") {
-        cx_emit(cx, sprintf("let %s: i32 = if %s == 0 || %s == 0 { 0 } else if %s == na_i || %s == na_i { na_i } else { 1 };", t, x, y, x, y))
-      } else {
-        cx_emit(cx, sprintf("let %s: i32 = if %s == 1 || %s == 1 { 1 } else if %s == na_i || %s == na_i { na_i } else { 0 };", t, x, y, x, y))
-      }
-      aw_val(t, "lgl")
-    },
+    "*" = , "/" = , "^" = , "%%" = , "%/%" = , "==" = , "!=" = , "<" = , "<=" = , ">" = , ">=" = ,
+    "&" = , "|" = cx_binop(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e),
+    "!" = , "sqrt" = , "exp" = , "log" = , "abs" = , "is.na" = cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e),
+    "c" = cx_c(cx, lapply(a, function(z) aw_gen(cx, z)), e),
+    "mean" = cx_mean(cx, aw_gen(cx, a[[1L]]), e),
+    "min" = , "max" = cx_extreme(cx, nm, lapply(a, function(z) aw_gen(cx, z)), e),
+    ":" = , "seq_len" = , "seq_along" = cx_seq_value(cx, e),
     "&&" = , "||" = {
       # The right operand is evaluated only when the left does not decide.
       t <- cx_tmp(cx)
-      x <- cx_lgl(cx, aw_gen(cx, a[[1L]]), e)
+      x <- cx_lgl(cx, cx_scalarize(cx, aw_gen(cx, a[[1L]]), e), e)
       stop_at <- if (nm == "&&") "0" else "1"
       cx$decls <- c(cx$decls, sprintf("var %s: i32 = 0;", t))
       cx_emit(cx, sprintf("%s = %s;", t, stop_at))
       cx_open(cx, sprintf("if %s != %s", x, stop_at))
-      y <- cx_lgl(cx, aw_gen(cx, a[[2L]]), e)
+      y <- cx_lgl(cx, cx_scalarize(cx, aw_gen(cx, a[[2L]]), e), e)
       other <- if (nm == "&&") "1" else "0"
       cx_emit(cx, sprintf("%s = if %s == %s { %s } else if %s == na_i || %s == na_i { na_i } else { %s };",
                           t, y, stop_at, stop_at, x, y, other))
       cx_close(cx)
       aw_val(t, "lgl")
     },
-    "[" = , "[[" = cx_index_read(cx, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), nm == "[[", e),
+    "[" = , "[[" = {
+      x <- aw_gen(cx, a[[1L]])
+      i <- aw_gen(cx, a[[2L]])
+      if (nm == "[[") i <- cx_scalarize(cx, i, e)
+      if (nm == "[" && i$type == "lgl") return(cx_read_mask(cx, x, i, e))
+      if (i$kind == "v") return(cx_read_gather(cx, x, i, e))
+      cx_index_read(cx, x, i, nm == "[[", e)
+    },
     "length" = {
       v <- aw_gen(cx, a[[1L]])
       if (v$type %in% c("null", "exit")) aw_unsupported("length() of no value", e)
@@ -601,15 +884,7 @@ aw_gen <- function(cx, e, want = TRUE) {
       aw_val(t, "int")
     },
     "numeric" = , "integer" = , "logical" = cx_ctor(cx, e),
-    "sqrt" = , "exp" = , "log" = , "abs" = cx_math(cx, nm, aw_gen(cx, a[[1L]]), e),
     "sum" = cx_sum(cx, aw_gen(cx, a[[1L]]), e),
-    "is.na" = {
-      v <- cx_scalar(aw_gen(cx, a[[1L]]), e)
-      t <- cx_tmp(cx)
-      test <- if (v$type == "dbl") sprintf("aw_isnan(%s)", v$g) else sprintf("%s == na_i", v$g)
-      cx_emit(cx, sprintf("let %s: i32 = if %s { 1 } else { 0 };", t, test))
-      aw_val(t, "lgl")
-    },
     aw_unsupported(sprintf("internal: no code generation for `%s`", nm), e)
   )
 }
@@ -623,6 +898,9 @@ aw_rt_externs <- c(
   "extern fn aw_ret_lgl1(x: i32);",
   "extern fn aw_ret_null();",
   "extern fn aw_rsum(x: const f64[:]) -> f64;",
+  "extern fn aw_rmean(x: const f64[:]) -> f64;",
+  "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
+  "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
   'extern "R_pow" fn aw_r_pow(x: f64, y: f64) -> f64;',
   'extern "sqrt" fn aw_c_sqrt(x: f64) -> f64;',
   'extern "exp" fn aw_c_exp(x: f64) -> f64;',

@@ -1,3 +1,11 @@
+# arwad 0.0.0.9002
+
+* Compiler slice 2a, vectors: vectorised arithmetic, comparison, logic and
+  math with R's recycling; `c()`, `mean()`, `min()`, `max()`; `a:b`,
+  `seq_len()`, `seq_along()` as values; index vectors and logical masks for
+  reading and for assigning a single value. Corpus: 59 functions, all native
+  and bit-identical to GNU R.
+
 # arwad 0.0.0.9001
 
 * First compiler slice (Phase 1): `aw_compile()` for double, integer and

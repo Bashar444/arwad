@@ -22,7 +22,7 @@ test_that("constructs outside the subset fall back with a reason", {
   expect_match(reason(function() break), "outside a loop")
   expect_match(reason(function(x) rnorm(x)), "random numbers")
   expect_match(reason(function(x) sum(x, na.rm = TRUE)), "na.rm")
-  expect_match(reason(function(n) { v <- 1:n; v }), "outside a for-loop header")
+  expect_match(reason(function(x) seq(1, x)), "seq\\(\\) is planned")
   expect_identical(aw_compile(sum), sum)
 })
 

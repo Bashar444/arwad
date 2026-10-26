@@ -52,6 +52,20 @@ test_that("fractional loop bounds and %% of fractions are left to R", {
   expect_identical(bailouts(m), 2L)
 })
 
+test_that("vector cases that R warns or errors about are left to R", {
+  skip_if_no_toolchain()
+  add <- aw_compile(function(x, y) x + y)
+  expect_identical(add(1:6, 1:2), 1:6 + 1:2)
+  expect_warning(v <- add(1:6, 1:4), "longer object length is not a multiple")
+  expect_identical(v, suppressWarnings(1:6 + 1:4))
+  top <- aw_compile(function(x) max(x))
+  expect_identical(top(c(2, 9, 4)), 9)
+  expect_warning(v <- top(numeric(0)), "no non-missing arguments")
+  expect_identical(v, -Inf)
+  pos <- aw_compile(function(x) if (x > 0) 1 else 2)
+  expect_error(pos(c(1, 2)), "the condition has length > 1")
+})
+
 test_that("seq_len() of a negative number gives R's error", {
   skip_if_no_toolchain()
   g <- aw_compile(function(n) { s <- 0L; for (i in seq_len(n)) s <- s + 1L; s })

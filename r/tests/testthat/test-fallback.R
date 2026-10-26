@@ -1,12 +1,12 @@
 # Signatures that cannot be compiled run in GNU R, with the reason recorded.
 
-test_that("vector arithmetic and type changes run in R with a reason", {
-  f <- function(x) x + 1
+test_that("vector sub-assignment and type changes run in R with a reason", {
+  f <- function(x) { x[1:2] <- c(9, 9); x }
   g <- aw_compile(f)
-  expect_identical(g(c(1, 2)), c(2, 3))
+  expect_identical(g(c(1, 2, 3)), c(9, 9, 3))
   s <- aw_stats(g)
   expect_false(s$native)
-  expect_match(s$reason, "vectorised operations are planned for slice 2")
+  expect_match(s$reason, "assigning a vector into x\\[i\\]")
 
   h <- aw_compile(function(n) { s <- 0L; for (i in seq_len(n)) s <- s + 0.5; s })
   expect_identical(h(2L), 1)

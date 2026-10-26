@@ -51,6 +51,63 @@ static double aw_rsum(sl_f64 x)
     return (double) s;
 }
 
+/* R's NA_real_ is the NaN whose low 32 bits are 1954. */
+static int aw_isna(double x)
+{
+    uint64_t u;
+    memcpy(&u, &x, sizeof u);
+    return isnan(x) && (uint32_t) (u & 0xFFFFFFFFu) == 1954u;
+}
+
+/* mean() of doubles: an extended-precision sum divided by n, then, when that
+ * is finite, a second pass that adds the mean of the residuals. Unlike sum(),
+ * the result is NA whenever x holds an NA, whichever NaN the sum kept. */
+static double aw_rmean(sl_f64 x)
+{
+    long double s = 0.0;
+    for (int64_t i = 0; i < x.len; i++) s += x.data[i];
+    if (isnan((double) s)) {
+        for (int64_t i = 0; i < x.len; i++) if (aw_isna(x.data[i])) return x.data[i];
+    }
+    s /= x.len;
+    if (isfinite((double) s)) {
+        long double t = 0.0;
+        for (int64_t i = 0; i < x.len; i++) t += x.data[i] - s;
+        s += t / x.len;
+    }
+    return (double) s;
+}
+
+/* mean() of integers or logicals: NA if any element is NA. */
+static double aw_imean(sl_i32 x, double na)
+{
+    long double s = 0.0;
+    for (int64_t i = 0; i < x.len; i++) {
+        if (x.data[i] == INT32_MIN) return na;
+        s += x.data[i];
+    }
+    return (double) (s / x.len);
+}
+
+/* min() and max() of doubles (?Extremes): NA wins over NaN, NaN over
+ * numbers, and of equal values (such as 0 and -0) the first is kept. */
+static double aw_rextreme(sl_f64 x, int32_t want_max)
+{
+    double s = 0.0;
+    int seen = 0;
+    for (int64_t i = 0; i < x.len; i++) {
+        double v = x.data[i];
+        if (isnan(v)) {
+            if (!aw_isna(s)) s = v;
+            seen = 1;
+        } else if (!seen || (want_max ? v > s : v < s)) {
+            s = v;
+            seen = 1;
+        }
+    }
+    return s;
+}
+
 /* Called by the shim after the entry returns: hands over the result buffer. */
 int aw_res_take(void **buf, int64_t *len)
 {
