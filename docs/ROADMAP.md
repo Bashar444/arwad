@@ -23,9 +23,9 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 | 1.1 | `arwad` R package skeleton ([`r/`](../r/)) that passes `R CMD check` on Windows, Linux and macOS | ◐ passes on Windows; CI on all three ([`.github/workflows/r-check.yml`](../.github/workflows/r-check.yml)) |
 | 1.2 | Front end, type inference and Goose emitter; content-hash cache | ◐ slice 1: scalars and vectors, one type per variable, guarded native execution ([ADR-0005](adr/0005-guarded-native-execution.md)); typed IR and memory planner pending |
 | 1.3 | `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason | ◐ slice 1 of the subset (see the status column in the spec) |
-| 1.4 | Build paths: an optimising C compiler (done, through `R CMD SHLIB`); a faster direct-compiler path with the Goose runtime compiled once; TinyCC for interactive use | ◐ first call 3.8–5.3 s per signature on the Phase 0 laptop; loops 20–40× faster than R's byte code ([bench/phase1/REPORT.md](../bench/phase1/REPORT.md)) |
+| 1.4 | Build paths: an optimising C compiler (done, through `R CMD SHLIB`); a faster direct-compiler path with the Goose runtime compiled once; TinyCC for interactive use | ◐ first call 3.8–5.3 s per signature on the Phase 0 laptop; loops 14–35× faster than R's byte code ([bench/phase1/REPORT.md](../bench/phase1/REPORT.md)) |
 | 1.5 | Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`) | planned |
-| 1.6 | Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test | ◐ 38 functions ([`r/inst/corpus/slice1.R`](../r/inst/corpus/slice1.R)), all native and bit-identical to GNU R |
+| 1.6 | Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test | ◐ 39 functions ([`r/inst/corpus/slice1.R`](../r/inst/corpus/slice1.R)), all native and bit-identical to GNU R |
 | 1.7 | Slice 2: matrices and `m[i, j]`, vectorised arithmetic with recycling, `mean`/`min`/`max`, `c()`, `solve` through LAPACK | planned |
 
 **Exit:** every corpus function either compiles or falls back correctly; all compiled functions match GNU R within 1e-9; no memory errors under AddressSanitizer.
