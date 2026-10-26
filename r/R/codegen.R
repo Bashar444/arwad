@@ -872,6 +872,7 @@ aw_gen <- function(cx, e, want = TRUE) {
     "!" = , "sqrt" = , "exp" = , "log" = , "abs" = , "floor" = , "ceiling" = ,
     "is.na" = cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e),
     "runif" = , "rnorm" = cx_random(cx, nm, a, e),
+    "sample" = , "sample.int" = cx_sample(cx, nm, a, e),
     "c" = cx_c(cx, lapply(a, function(z) aw_gen(cx, z)), e),
     "mean" = cx_mean(cx, aw_gen(cx, a[[1L]]), e),
     "min" = , "max" = cx_extreme(cx, nm, lapply(a, function(z) aw_gen(cx, z)), e),
@@ -954,7 +955,8 @@ aw_rt_externs <- c(
   'extern "floor" fn aw_c_floor(x: f64) -> f64;',
   'extern "ceil" fn aw_c_ceiling(x: f64) -> f64;',
   'extern "Rf_runif" fn aw_r_runif(a: f64, b: f64) -> f64;',
-  'extern "Rf_rnorm" fn aw_r_rnorm(mu: f64, sigma: f64) -> f64;'
+  'extern "Rf_rnorm" fn aw_r_rnorm(mu: f64, sigma: f64) -> f64;',
+  'extern "R_unif_index" fn aw_r_unif_index(dn: f64) -> f64;'
 )
 
 # Generates the Goose unit and its C shim for one signature. `types` is a list

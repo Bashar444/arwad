@@ -78,7 +78,8 @@ Verified by [`r/inst/corpus/slice3.R`](../r/inst/corpus/slice3.R) (7 functions, 
 - `runif(1)` and `rnorm(1, ...)` with a literal count of one give scalars.
 - A call that bails out restores `.Random.seed` before GNU R re-runs it ([ADR-0005](../docs/adr/0005-guarded-native-execution.md)); a draw that is `NaN` (R warns "NAs produced") is such a case.
 - `floor()` and `ceiling()`.
-- Not yet: `sample()`, `set.seed()` inside a compiled function, other distributions.
+- `sample(x, size, replace)` and `sample.int(n, size, replace)`: indices from R's own `R_unif_index()` (so `RNGkind(sample.kind = ...)` is honoured), drawn directly with replacement or for fewer than two draws, otherwise from a shrinking pool, as R does. Left to GNU R: `prob`, a single number given to `sample()` where R samples `1:x` from a vector argument, and R's errors (a sample larger than the population without replacement, an `NA` `replace`).
+- Not yet: `set.seed()` inside a compiled function, other distributions.
 
 ## Not in version 0 (falls back to R)
 

@@ -5,6 +5,59 @@
 # bails out, the dispatcher restores .Random.seed before GNU R re-runs the
 # call (ADR-0005).
 
+# sample(x, size, replace) and sample.int(n, size, replace): indices come
+# from R's own R_unif_index() (honouring RNGkind(sample.kind = ...)); with
+# replacement (or fewer than two draws) each is drawn directly, without
+# replacement from a shrinking pool, as R documents. A single number given
+# to sample() means 1:x in R; that case and R's errors are left to GNU R.
+cx_sample <- function(cx, fn, a, e) {
+  pn <- if (fn == "sample") c("x", "size", "replace") else c("n", "size", "replace")
+  m <- aw_match_args(a, pn)
+  if (is.null(m[[pn[1L]]])) aw_unsupported(sprintf("%s() without its first argument", fn), e)
+  xv <- aw_gen(cx, m[[pn[1L]]])
+  if (xv$type %in% c("null", "exit")) aw_unsupported("a population without a value", e)
+  sz <- if (!is.null(m$size)) aw_gen(cx, m$size)
+  rp <- if (is.null(m$replace)) "0" else cx_lgl(cx, cx_scalarize(cx, aw_gen(cx, m$replace), e), e)
+  cx_emit(cx, sprintf("if %s == na_i { %s }", rp, cx_bail(cx, "an NA replace argument (R errors)", e)))
+  pop <- NULL
+  if (fn == "sample" && xv$kind != "s") {
+    cx_emit(cx, sprintf("if %s.len == 1 { %s }", xv$g, cx_bail(cx, "sample() of a single number (R samples 1:x)", e)))
+    n <- paste0(xv$g, ".len")
+    pop <- xv
+  } else {
+    if (fn == "sample") {
+      if (xv$type == "lgl") aw_unsupported("sample() of a single logical value", e)
+      ok <- if (xv$type == "dbl") sprintf("%s >= 1.0", xv$g) else sprintf("%s != na_i && %s >= 1", xv$g, xv$g)
+      cx_emit(cx, sprintf("if !(%s) { %s }", ok, cx_bail(cx, "sample() of a number below 1 or not finite", e)))
+    }
+    n <- cx_count(cx, xv, e)
+  }
+  k <- if (is.null(sz)) n else cx_count(cx, sz, e)
+  cx_emit(cx, sprintf("if (%s == 0 && %s > %s) || (%s == 0 && %s > 0) { %s }", rp, k, n, n, k,
+                      cx_bail(cx, "a sample larger than the population without replacement (R errors)", e)))
+  cx$rng <- TRUE
+  t <- cx_tmp(cx); i <- cx_tmp(cx); pool <- cx_tmp(cx); left <- cx_tmp(cx); j <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: i32[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s, 0);", t, k))
+  cx_open(cx, sprintf("if %s != 0 || %s < 2", rp, k))
+  cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = (aw_r_unif_index(%s as f64) + 1.0) as i32; }", i, k, t, i, n))
+  cx_close(cx, "} else {")
+  cx$ind <- cx$ind + 1L
+  cx_emit(cx, sprintf("var %s: i32[>..] = [];", pool))
+  cx_emit(cx, sprintf("%s.resize(%s, 0);", pool, n))
+  cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = %s as i32; }", i, n, pool, i, i))
+  cx_emit(cx, sprintf("var %s: i64 = %s;", left, n))
+  cx_open(cx, sprintf("for %s in 0..%s", i, k))
+  cx_emit(cx, sprintf("let %s: i64 = aw_r_unif_index(%s as f64) as i64;", j, left))
+  cx_emit(cx, sprintf("%s[%s] = %s[%s] + 1;", t, i, pool, j))
+  cx_emit(cx, sprintf("%s -= 1;", left))
+  cx_emit(cx, sprintf("%s[%s] = %s[%s];", pool, j, pool, left))
+  cx_close(cx)
+  cx_close(cx)
+  idx <- aw_val(t, "int", "v")
+  if (is.null(pop)) idx else cx_read_gather(cx, pop, idx, e)
+}
+
 cx_random <- function(cx, fn, a, e) {
   pn <- if (fn == "runif") c("n", "min", "max") else c("n", "mean", "sd")
   m <- aw_match_args(a, pn)

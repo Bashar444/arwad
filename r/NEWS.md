@@ -1,3 +1,10 @@
+# arwad 0.0.0.9006
+
+* `sample()` and `sample.int()` with and without replacement, drawing
+  indices through R's own `R_unif_index()`; bootstrap resampling such as
+  `mean(x[sample.int(n, replace = TRUE)])` now compiles and reproduces R's
+  stream. Corpus: 92 functions.
+
 # arwad 0.0.0.9005
 
 * Compiler slice 3, random numbers: `runif()` and `rnorm()` draw from GNU

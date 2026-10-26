@@ -29,6 +29,7 @@ aw_arity <- list(
   "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
   "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2,
   "floor" = 1L, "ceiling" = 1L, "runif" = 1:3, "rnorm" = 1:3,
+  "sample" = 1:3, "sample.int" = 1:3,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
   "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L,
   "c" = c(1L, Inf), "mean" = 1L, "min" = c(1L, Inf), "max" = c(1L, Inf)
@@ -38,7 +39,8 @@ aw_arity <- list(
 aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
                     seq_len = "length.out", seq_along = "along.with",
                     matrix = c("data", "nrow", "ncol"), crossprod = c("x", "y"),
-                    solve = c("a", "b"), runif = c("n", "min", "max"), rnorm = c("n", "mean", "sd"))
+                    solve = c("a", "b"), runif = c("n", "min", "max"), rnorm = c("n", "mean", "sd"),
+                    sample = c("x", "size", "replace"), sample.int = c("n", "size", "replace"))
 
 # Compiled functions that do not live in base, by their package.
 aw_home <- c(runif = "stats", rnorm = "stats")
@@ -63,8 +65,7 @@ aw_planned <- c(
   "function" = "functions defined inside the function (closures)",
   "tcrossprod" = "tcrossprod() is planned for a later slice", "diag" = "diag() is planned for a later slice",
   "seq" = "seq() is planned for slice 2",
-  "sample" = "sample() is planned for a later slice (runif() and rnorm() are compiled)",
-  "set.seed" = "set.seed() inside a compiled function changes global state; call it before",
+  "set.seed" ="set.seed() inside a compiled function changes global state; call it before",
   "print" = "output is a side effect outside the subset", "cat" = "output is a side effect outside the subset",
   "message" = "output is a side effect outside the subset",
   "stop" = "signalling conditions is planned for slice 2", "warning" = "signalling conditions is planned for slice 2",
@@ -106,7 +107,8 @@ aw_check <- function(f) {
       aw_unsupported(sprintf("`%s` is redefined where the function was created", nm))
   }
   list(formals = nms, vec = unique(s$vec), reassigned = unique(s$reassigned),
-       subassigned = unique(s$subassigned), rng = any(c("runif", "rnorm") %in% s$calls))
+       subassigned = unique(s$subassigned),
+       rng = any(c("runif", "rnorm", "sample", "sample.int") %in% s$calls))
 }
 
 aw_is_const <- function(e) {

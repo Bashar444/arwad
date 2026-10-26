@@ -15,6 +15,7 @@
 double R_pow(double x, double y);
 double Rf_runif(double a, double b);    /* R's runif() for one draw: unif_rand() */
 double Rf_rnorm(double mu, double sigma); /* R's rnorm() for one draw: norm_rand() */
+double R_unif_index(double dn);           /* R's index draw for sample(), by sample.kind */
 
 static int aw_res_type = 0;   /* 0 none, 1 double, 2 integer, 3 logical, 4 NULL */
 static void *aw_res_buf = NULL;

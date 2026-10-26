@@ -2,7 +2,7 @@ test_that("every corpus function runs natively and matches GNU R bit for bit", {
   skip_if_no_toolchain()
   files <- list.files(system.file("corpus", package = "arwad"), pattern = "\\.R$", full.names = TRUE)
   corpus <- unlist(lapply(files, function(p) source(p, local = new.env())$value), recursive = FALSE)
-  expect_gte(length(corpus), 86L)
+  expect_gte(length(corpus), 92L)
   for (nm in names(corpus)) {
     entry <- corpus[[nm]]
     g <- aw_compile(entry$f, name = nm)
