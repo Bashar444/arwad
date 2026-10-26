@@ -54,6 +54,14 @@ jobs:
           chmod +x "$exe"
           "$exe" version
           echo "ARWAD_GOOSE=$exe" >> "$GITHUB_ENV"
+          echo "ARWAD_TEST_CACHE=$RUNNER_TEMP/arwad-cache" >> "$GITHUB_ENV"
+
+      - name: Keep compiled units between runs
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/arwad-cache
+          key: arwad-units-${{ runner.os }}-${{ github.sha }}
+          restore-keys: arwad-units-${{ runner.os }}-
 
       - uses: r-lib/actions/check-r-package@v2
         with:
@@ -94,6 +102,14 @@ jobs:
           exe=$(find "$RUNNER_TEMP/goose" -type f -name goose | head -n 1)
           chmod +x "$exe"
           echo "ARWAD_GOOSE=$exe" >> "$GITHUB_ENV"
+          echo "ARWAD_TEST_CACHE=$RUNNER_TEMP/arwad-cache" >> "$GITHUB_ENV"
+
+      - name: Keep compiled units between runs
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/arwad-cache
+          key: arwad-asan-units-${{ github.sha }}
+          restore-keys: arwad-asan-units-
 
       - name: Install arwad
         run: R CMD INSTALL r

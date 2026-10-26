@@ -1,5 +1,7 @@
 # Built units go to a per-session temporary cache, never the user's cache.
-options(arwad.cache_dir = file.path(tempdir(), "arwad-cache"))
+# CI sets ARWAD_TEST_CACHE to a directory kept between runs; units are named
+# by a hash of their content, so only changed units are rebuilt.
+options(arwad.cache_dir = Sys.getenv("ARWAD_TEST_CACHE", file.path(tempdir(), "arwad-cache")))
 
 skip_if_no_toolchain <- function() {
   skip_if_not(aw_toolchain()$ok, "Goose toolchain not available (set ARWAD_GOOSE)")
