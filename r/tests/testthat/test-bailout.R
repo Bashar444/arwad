@@ -97,6 +97,20 @@ test_that("products and solve() leave R's special cases to R", {
   expect_identical(sum(aw_stats(mm)$bailouts), 2L)
 })
 
+test_that("a bailout in a function that draws random numbers restores the seed", {
+  skip_if_no_toolchain()
+  f <- function(n, a, b) { u <- runif(n); v <- runif(1, a, b); c(u, v) }
+  g <- aw_compile(f)
+  set.seed(5)
+  want <- suppressWarnings(f(3, 1, 0))
+  s_want <- get(".Random.seed", envir = globalenv())
+  set.seed(5)
+  expect_warning(got <- g(3, 1, 0), "NAs produced")
+  expect_identical(got, want)
+  expect_identical(get(".Random.seed", envir = globalenv()), s_want)
+  expect_identical(sum(aw_stats(g)$bailouts), 1L)
+})
+
 test_that("seq_len() of a negative number gives R's error", {
   skip_if_no_toolchain()
   g <- aw_compile(function(n) { s <- 0L; for (i in seq_len(n)) s <- s + 1L; s })

@@ -70,6 +70,16 @@ Verified by the second half of [`r/inst/corpus/slice2b.R`](../r/inst/corpus/slic
 - `solve(a)` and `solve(a, b)` for a square double matrix: LAPACK `dgesv`, with the reciprocal condition number (`dgecon`) checked against R's default tolerance.
 - Left to GNU R: operands with `NA`, `NaN`, infinite or very large values (R's default matrix product then uses its own code), non-conformable operands, singular systems, integer or logical `a` in `solve()`, and two vectors of different lengths in `%*%`.
 
+### Compiler slice 3 (26 October 2026): random numbers
+
+Verified by [`r/inst/corpus/slice3.R`](../r/inst/corpus/slice3.R) (7 functions, compared on values and on the final `.Random.seed`; 86 functions in all):
+
+- `runif(n, min, max)` and `rnorm(n, mean, sd)`, with vector or scalar parameters recycled as R does, and `n` as a count or, for a vector, its length. Draws come from GNU R's own generators (`Rf_runif`, `Rf_rnorm` in R's C API, under whatever `RNGkind()` is set), between `GetRNGstate()` and `PutRNGstate()`, so the stream is bit-identical to R's.
+- `runif(1)` and `rnorm(1, ...)` with a literal count of one give scalars.
+- A call that bails out restores `.Random.seed` before GNU R re-runs it ([ADR-0005](../docs/adr/0005-guarded-native-execution.md)); a draw that is `NaN` (R warns "NAs produced") is such a case.
+- `floor()` and `ceiling()`.
+- Not yet: `sample()`, `set.seed()` inside a compiled function, other distributions.
+
 ## Not in version 0 (falls back to R)
 
 Closures created inside the function, `...`, environments, `eval` / `quote` / `substitute`, S3 and S4 dispatch, lists, data frames, character vectors, factors, recursion, `tryCatch`, `on.exit`, side effects on global state.

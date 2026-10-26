@@ -1,3 +1,12 @@
+# arwad 0.0.0.9005
+
+* Compiler slice 3, random numbers: `runif()` and `rnorm()` draw from GNU
+  R's own generators through its C API, between `GetRNGstate()` and
+  `PutRNGstate()`, so values and the final `.Random.seed` are identical to
+  R's. A call that bails out restores `.Random.seed` before R re-runs it.
+* `floor()` and `ceiling()`.
+* Corpus: 86 functions; seeded entries compare the generator state too.
+
 # arwad 0.0.0.9004
 
 * Compiler slice 2b, part 2: `%*%`, `crossprod()` and `solve()` through R's

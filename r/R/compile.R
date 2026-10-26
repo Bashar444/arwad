@@ -150,6 +150,9 @@ aw_specialise <- function(st, key) {
 }
 
 aw_dispatch <- function(st, ...) {
+  # A function that draws random numbers: keep the seed, so that a call the
+  # native code hands back to GNU R starts from the same stream.
+  seed <- if (st$info$rng) get0(".Random.seed", envir = globalenv(), inherits = FALSE)
   # Fast path: the native unit of the last native call checks the argument
   # types itself and returns -1 when they do not fit.
   sp <- st$last
@@ -160,7 +163,7 @@ aw_dispatch <- function(st, ...) {
       sp$calls <- sp$calls + 1L
       if (s == 0L) return(res[[2L]])
       if (s == 1L) return(invisible(res[[2L]]))
-      return(aw_bailout(st, sp, s, list(...)))
+      return(aw_bailout(st, sp, s, list(...), seed))
     }
   }
   args <- list(...)
@@ -178,14 +181,21 @@ aw_dispatch <- function(st, ...) {
   s <- res[[1L]]
   if (s == 0L) return(res[[2L]])
   if (s == 1L) return(invisible(res[[2L]]))
-  aw_bailout(st, sp, s, args)
+  aw_bailout(st, sp, s, args, seed)
 }
 
-# The native code met a case it does not model: count it, and run the call
-# in GNU R.
-aw_bailout <- function(st, sp, s, args) {
+# The native code met a case it does not model: count it, restore the random
+# seed if the function draws random numbers, and run the call in GNU R.
+aw_bailout <- function(st, sp, s, args, seed = NULL) {
   why <- sp$bails[s - 1L]
   sp$bailouts[why] <- if (is.na(sp$bailouts[why])) 1L else sp$bailouts[why] + 1L
+  if (st$info$rng) {
+    if (is.null(seed)) {
+      if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) rm(".Random.seed", envir = globalenv())
+    } else {
+      assign(".Random.seed", seed, envir = globalenv())
+    }
+  }
   names(args) <- st$info$formals
   do.call(st$f, args)
 }

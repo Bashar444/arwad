@@ -382,7 +382,7 @@ cx_sum <- function(cx, v, e) {
 # R's result type of an operation on operands of these types.
 aw_result_type <- function(op, ta, tb = ta) {
   if (op %in% c("==", "!=", "<", "<=", ">", ">=", "&", "|", "!", "is.na")) return("lgl")
-  if (op %in% c("/", "^", "sqrt", "exp", "log")) return("dbl")
+  if (op %in% c("/", "^", "sqrt", "exp", "log", "floor", "ceiling")) return("dbl")
   if (ta != "dbl" && tb != "dbl") "int" else "dbl"
 }
 
@@ -459,7 +459,7 @@ cx_unary <- function(cx, op, v, e) {
 cx_unary1 <- function(cx, op, v, e) {
   cx_scalar(v, e)
   if (op == "+") return(aw_val(v$g, if (v$type == "lgl") "int" else v$type))
-  if (op %in% c("sqrt", "exp", "log", "abs")) return(cx_math(cx, op, v, e))
+  if (op %in% c("sqrt", "exp", "log", "abs", "floor", "ceiling")) return(cx_math(cx, op, v, e))
   t <- cx_tmp(cx)
   if (op == "-") {
     if (v$type == "dbl") {
@@ -869,7 +869,9 @@ aw_gen <- function(cx, e, want = TRUE) {
     },
     "*" = , "/" = , "^" = , "%%" = , "%/%" = , "==" = , "!=" = , "<" = , "<=" = , ">" = , ">=" = ,
     "&" = , "|" = cx_binop(cx, nm, aw_gen(cx, a[[1L]]), aw_gen(cx, a[[2L]]), e),
-    "!" = , "sqrt" = , "exp" = , "log" = , "abs" = , "is.na" = cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e),
+    "!" = , "sqrt" = , "exp" = , "log" = , "abs" = , "floor" = , "ceiling" = ,
+    "is.na" = cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e),
+    "runif" = , "rnorm" = cx_random(cx, nm, a, e),
     "c" = cx_c(cx, lapply(a, function(z) aw_gen(cx, z)), e),
     "mean" = cx_mean(cx, aw_gen(cx, a[[1L]]), e),
     "min" = , "max" = cx_extreme(cx, nm, lapply(a, function(z) aw_gen(cx, z)), e),
@@ -949,7 +951,10 @@ aw_rt_externs <- c(
   'extern "exp" fn aw_c_exp(x: f64) -> f64;',
   'extern "log" fn aw_c_log(x: f64) -> f64;',
   'extern "fabs" fn aw_c_fabs(x: f64) -> f64;',
-  'extern "floor" fn aw_c_floor(x: f64) -> f64;'
+  'extern "floor" fn aw_c_floor(x: f64) -> f64;',
+  'extern "ceil" fn aw_c_ceiling(x: f64) -> f64;',
+  'extern "Rf_runif" fn aw_r_runif(a: f64, b: f64) -> f64;',
+  'extern "Rf_rnorm" fn aw_r_rnorm(mu: f64, sigma: f64) -> f64;'
 )
 
 # Generates the Goose unit and its C shim for one signature. `types` is a list
@@ -1008,14 +1013,15 @@ aw_codegen <- function(info, f, types, label) {
     cx$lines,
     "}"
   )
-  list(goose = paste(goose, collapse = "\n"), shim = aw_shim(info, types),
-       bails = cx$bails, signature = sig_txt)
+  rng <- isTRUE(cx$rng)
+  list(goose = paste(goose, collapse = "\n"), shim = aw_shim(info, types, rng),
+       bails = cx$bails, signature = sig_txt, rng = rng)
 }
 
 aw_sexp <- c(dbl = "REALSXP", int = "INTSXP", lgl = "LGLSXP")
 aw_cptr <- c(dbl = "REAL", int = "INTEGER", lgl = "LOGICAL")
 
-aw_shim <- function(info, types) {
+aw_shim <- function(info, types, rng = FALSE) {
   n <- length(info$formals)
   get <- character()
   pass <- character()
@@ -1077,7 +1083,9 @@ aw_shim <- function(info, types) {
     "    }",
     sprintf('    if (XLENGTH(args) != %d) error("arwad: wrong number of arguments");', n),
     get,
+    if (rng) "    GetRNGstate();",
     sprintf("    int32_t st = aw_entry_@H@(%s);", paste(pass, collapse = ", ")),
+    if (rng) "    PutRNGstate();",
     "    void *buf = NULL;",
     "    int64_t len = 0, nr = -1, nc = -1;",
     "    int rt = aw_res_take(&buf, &len, &nr, &nc);",

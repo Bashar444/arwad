@@ -2,12 +2,14 @@ test_that("every corpus function runs natively and matches GNU R bit for bit", {
   skip_if_no_toolchain()
   files <- list.files(system.file("corpus", package = "arwad"), pattern = "\\.R$", full.names = TRUE)
   corpus <- unlist(lapply(files, function(p) source(p, local = new.env())$value), recursive = FALSE)
-  expect_gte(length(corpus), 79L)
+  expect_gte(length(corpus), 86L)
   for (nm in names(corpus)) {
     entry <- corpus[[nm]]
     g <- aw_compile(entry$f, name = nm)
     expect_s3_class(g, "arwad_function")
-    for (args in entry$inputs) expect_same_as_r(entry$f, g, args, nm)
+    for (args in entry$inputs) {
+      if (is.null(entry$seed)) expect_same_as_r(entry$f, g, args, nm) else expect_same_stream(entry$f, g, args, nm, entry$seed)
+    }
     s <- aw_stats(g)
     expect_true(all(s$native), label = paste(nm, "runs natively:", paste(stats::na.omit(s$reason), collapse = "; ")))
     expect_identical(sum(s$bailouts), 0L, label = paste(nm, "bailouts"))
