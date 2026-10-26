@@ -36,6 +36,25 @@ The first version built each unit with `R CMD SHLIB` and a standalone Goose unit
 
 The dispatch now calls the native unit of the previous call first; its C shim checks the argument types and attributes itself and returns a mismatch code when they do not fit, and only then does R work out the signature. A same-session A/B with garbage collections filtered out found no cost of the separate runtime object in the generated loops: `sum_sq` 3.82 ms standalone against 3.89 ms direct, `cumsum_loop` 5.74 against 5.49 ms.
 
+## 1c. Slices 2 and 3: matrix and resampling code
+
+Script [`slice23_bench.R`](slice23_bench.R), raw data [`slice23_timing.csv`](slice23_timing.csv); same laptop, one run, each call after `set.seed(1)` in both R and arwad, results compared bit for bit (all identical, all native, no bailouts).
+
+| Case | Work | R median (ms) | arwad median (ms) | Speed-up |
+|---|---|---|---|---|
+| `ols_bootstrap` | 2,000 case-resampling OLS fits (n = 200, k = 5): resample rows in loops, `solve(crossprod(Xb), crossprod(Xb, yb))` | 625.9 | 53.39 | **11.7×** |
+| `gibbs` | 200,000-step bivariate normal Gibbs sampler with `rnorm(1, ...)` | 563.4 | 28.24 | **20.0×** |
+| `logit_irls` | 25 IRLS iterations of a logistic regression (n = 400) with a weighting loop | 10.62 | 1.545 | **6.9×** |
+| `power_iteration` | 500 iterations of `A %*% v` on a 50 by 50 matrix | 2.737 | 1.643 | 1.7× |
+| `bootstrap_mean` | 20,000 means of `x[sample.int(n, replace = TRUE)]` (n = 500) | 905.5 | 588.0 | 1.5× |
+| `permutation_test` | 5,000 permutations of 1,000 values with `sample()` | 539.6 | 414.5 | 1.3× |
+
+Interpretation:
+
+1. **The same pattern as slice 1.** Where R interprets work per iteration (the Gibbs sampler, the weighting loop of IRLS, resampling rows one element at a time), compiled code is 7 to 20 times faster.
+2. **Against idiomatic R the gain is smaller.** The OLS bootstrap written as R users usually write it, `X[idx, , drop = FALSE]` with `solve(crossprod())`, took 111.9 ms in R: arwad's loop-style version is 2.1 times faster than that, not 11.7 times. Most of the idiomatic version already runs in R's C code.
+3. **Where R's own primitives do the work, little is gained.** In `bootstrap_mean` and `permutation_test` the time goes into `sample()`, indexing and `mean()`, which are compiled C in R as well, and arwad also allocates a fresh vector per resample; in `power_iteration` the time is in BLAS on both sides. Avoiding per-iteration allocation is the next optimisation for resampling engines (Phase 2).
+
 ## 2. Environment
 
 Intel Core i7-7600U (2 cores, 4 threads), Windows 11 x64 (build 26100); R 4.6.0 (ucrt); Goose v2026.3 (runtime 4d3da949e563); Rtools45 GCC 14.3.0 with R's own compile flags (`-O2 -mfpmath=sse -msse2 -mstackrealign`, read from `R CMD SHLIB`) plus `-ffp-contract=off`.
