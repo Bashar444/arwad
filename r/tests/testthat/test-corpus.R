@@ -24,6 +24,20 @@ test_that("calls switch between native units by argument type", {
   expect_identical(sum(s$calls), 6L)
 })
 
+test_that("both build paths work: direct, and R CMD SHLIB as the fallback", {
+  skip_if_no_toolchain()
+  f <- function(x) { s <- 0; for (v in x) s <- s + v * v; s }
+  method <- function(g) get("dbl[]", envir = attr(g, "arwad_state")$specs)$method
+  g <- aw_compile(f)
+  expect_identical(g(c(1.5, -2)), f(c(1.5, -2)))
+  expect_identical(method(g), "direct")
+  old <- options(arwad.build = "shlib", arwad.cache_dir = tempfile("arwad-shlib"))
+  on.exit(options(old))
+  h <- aw_compile(f)
+  expect_identical(h(c(1.5, -2)), f(c(1.5, -2)))
+  expect_identical(method(h), "R CMD SHLIB")
+})
+
 test_that("a compiled function does not change its caller's vector", {
   skip_if_no_toolchain()
   g <- aw_compile(function(x) { x[1] <- 100; x })

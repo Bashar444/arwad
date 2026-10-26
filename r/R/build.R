@@ -72,7 +72,8 @@ aw_hash <- function(text) {
 aw_run <- function(cmd, args, dir) {
   owd <- setwd(dir)
   on.exit(setwd(owd))
-  out <- suppressWarnings(system2(cmd, args, stdout = TRUE, stderr = TRUE))
+  out <- tryCatch(suppressWarnings(system2(cmd, args, stdout = TRUE, stderr = TRUE)),
+                  error = function(e) structure(conditionMessage(e), status = 127L))
   status <- attr(out, "status")
   list(ok = is.null(status) || identical(as.integer(status), 0L), out = out)
 }
@@ -188,14 +189,21 @@ aw_cc_probe <- function() {
   if (length(comp) == 0L) return(FALSE)
   comp <- trimws(sub("-c probe.c -o probe.o", "", comp[1L], fixed = TRUE))
   if (.Platform$OS.type == "windows") {
-    # R's Windows rule wraps the link in a shell script; this is its core.
+    # R's Windows rule builds an export list around the link; this is its core.
     link <- sprintf('%s -shared -o @OUT@ @OBJ@ -L"%s" -lR', sub(" .*", "", comp), R.home("bin"))
   } else {
-    link <- grep(paste("-o", lib), out, fixed = TRUE, value = TRUE)
+    # R's rule wraps the link in `if test ...; then echo <link>; <link>; fi`.
+    link <- trimws(grep(paste("-o", lib), out, fixed = TRUE, value = TRUE))
+    link <- sub("[;\\[:space:]]+$", "", sub("^echo[[:space:]]+", "", link))
     if (length(link) == 0L) return(FALSE)
-    link <- sub(paste("-o", lib), "-o @OUT@", trimws(link[1L]), fixed = TRUE)
+    link <- sub(paste("-o", lib), "-o @OUT@", link[1L], fixed = TRUE)
     link <- sub("probe.o", "@OBJ@", link, fixed = TRUE)
   }
+  # Trust the commands only once they have built the probe.
+  ok <- aw_cmd(paste(comp, "-c probe.c"), dir)$ok &&
+    aw_cmd(gsub("@OBJ@", "probe.o", gsub("@OUT@", lib, link, fixed = TRUE), fixed = TRUE), dir)$ok &&
+    file.exists(file.path(dir, lib))
+  if (!ok) return(FALSE)
   list(compile = comp, link = link)
 }
 
