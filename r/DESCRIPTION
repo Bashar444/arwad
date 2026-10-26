@@ -1,0 +1,32 @@
+Package: arwad
+Type: Package
+Title: Compile Loop-Heavy R Functions to Native Code Through 'Goose'
+Version: 0.0.0.9001
+Authors@R:
+    person("Bashar", "Al Agha", email = "ba8160@srmist.edu.in",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0004-5178-2345"))
+Description: Compiles R functions written in a statistical subset of the
+    language (scalar and vector arithmetic, loops, indexing) to native code
+    through the 'Goose' language and a C compiler, and calls the result from
+    R. Results must match GNU R: any situation the native path does not model
+    (an error, a warning, an unusual index) is handed back to GNU R, which
+    re-runs the call. Functions outside the subset are returned unchanged
+    with the reason recorded.
+License: MIT + file LICENSE
+URL: https://github.com/bashar-al-agha/arwad
+BugReports: https://github.com/bashar-al-agha/arwad/issues
+Depends:
+    R (>= 4.2.0)
+Imports:
+    tools,
+    utils
+Suggests:
+    testthat (>= 3.0.0)
+SystemRequirements: Goose (>= 2026.3) <https://github.com/aardappel/goose>
+    for compilation, and the C compiler R uses for packages (Rtools on
+    Windows). Without them every function runs in GNU R.
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0

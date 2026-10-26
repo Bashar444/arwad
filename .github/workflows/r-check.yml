@@ -1,0 +1,62 @@
+# R CMD check of the arwad package (r/) on Linux, macOS and Windows, with the
+# Goose toolchain installed so that the equivalence corpus runs natively.
+name: R-CMD-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goose: goose-v2026.3-linux-x64.tar.gz
+          - os: macos-latest
+            goose: goose-v2026.3-macos-arm64.tar.gz
+          - os: windows-latest
+            goose: goose-v2026.3-windows-x64.zip
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: any::rcmdcheck
+          needs: check
+
+      - name: Install Goose v2026.3
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/goose"
+          cd "$RUNNER_TEMP/goose"
+          curl -fsSL -o "${{ matrix.goose }}" "https://github.com/aardappel/goose/releases/download/v2026.3/${{ matrix.goose }}"
+          case "${{ matrix.goose }}" in
+            *.zip) unzip -q "${{ matrix.goose }}" ;;
+            *) tar -xzf "${{ matrix.goose }}" ;;
+          esac
+          exe=$(find "$RUNNER_TEMP/goose" -type f \( -name goose -o -name goose.exe \) | head -n 1)
+          chmod +x "$exe"
+          "$exe" version
+          echo "ARWAD_GOOSE=$exe" >> "$GITHUB_ENV"
+
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: r
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"error"'

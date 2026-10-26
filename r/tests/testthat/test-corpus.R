@@ -1,0 +1,36 @@
+test_that("every corpus function runs natively and matches GNU R bit for bit", {
+  skip_if_no_toolchain()
+  corpus <- source(system.file("corpus", "slice1.R", package = "arwad"), local = new.env())$value
+  expect_gte(length(corpus), 30L)
+  for (nm in names(corpus)) {
+    entry <- corpus[[nm]]
+    g <- aw_compile(entry$f, name = nm)
+    expect_s3_class(g, "arwad_function")
+    for (args in entry$inputs) expect_same_as_r(entry$f, g, args, nm)
+    s <- aw_stats(g)
+    expect_true(all(s$native), label = paste(nm, "runs natively:", paste(stats::na.omit(s$reason), collapse = "; ")))
+    expect_identical(sum(s$bailouts), 0L, label = paste(nm, "bailouts"))
+  }
+})
+
+test_that("a compiled function does not change its caller's vector", {
+  skip_if_no_toolchain()
+  g <- aw_compile(function(x) { x[1] <- 100; x })
+  v <- c(1, 2, 3)
+  expect_identical(g(v), c(100, 2, 3))
+  expect_identical(v, c(1, 2, 3))
+})
+
+test_that("the native unit is reused across calls and from the disk cache", {
+  skip_if_no_toolchain()
+  f <- function(x) { s <- 0; for (v in x) s <- s + v; s }
+  g1 <- aw_compile(f)
+  g1(c(1, 2))
+  g2 <- aw_compile(f)
+  g2(c(3, 4, 5))
+  st <- attr(g2, "arwad_state")
+  sp <- get("dbl[]", envir = st$specs)
+  expect_true(sp$ok)
+  expect_true(sp$cached)
+  expect_match(aw_source(g2) |> utils::capture.output() |> paste(collapse = "\n"), "export \"aw_entry_")
+})
