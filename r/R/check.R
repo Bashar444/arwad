@@ -25,7 +25,8 @@ aw_arity <- list(
   "+" = 1:2, "-" = 1:2, "*" = 2L, "/" = 2L, "^" = 2L, "%%" = 2L, "%/%" = 2L,
   "==" = 2L, "!=" = 2L, "<" = 2L, "<=" = 2L, ">" = 2L, ">=" = 2L,
   "!" = 1L, "&" = 2L, "|" = 2L, "&&" = 2L, "||" = 2L,
-  "[" = 2L, "[[" = 2L, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
+  "[" = 2:3, "[[" = 2:3, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
+  "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
   "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L,
   "c" = c(1L, Inf), "mean" = 1L, "min" = c(1L, Inf), "max" = c(1L, Inf)
@@ -33,7 +34,22 @@ aw_arity <- list(
 
 # Argument names R users write for these, accepted when given by name.
 aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
-                    seq_len = "length.out", seq_along = "along.with")
+                    seq_len = "length.out", seq_along = "along.with",
+                    matrix = c("data", "nrow", "ncol"))
+
+# Arguments of a call in the order of `formals`, matching exact names first
+# and then positions, as R does (partial names are not accepted).
+aw_match_args <- function(args, formals) {
+  out <- vector("list", length(formals))
+  names(out) <- formals
+  an <- names(args)
+  if (is.null(an)) an <- rep("", length(args))
+  for (k in which(nzchar(an))) out[an[k]] <- list(args[[k]])
+  free <- setdiff(formals, an[nzchar(an)])
+  pos <- which(!nzchar(an))
+  for (j in seq_along(pos)) out[free[j]] <- list(args[[pos[j]]])
+  out
+}
 
 # Friendlier reasons for common calls outside the subset.
 aw_planned <- c(
@@ -153,7 +169,7 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
   n <- length(args)
   ar <- aw_arity[[nm]]
   if (!(n %in% ar) && !(length(ar) == 2L && is.infinite(ar[2L]) && n >= ar[1L])) {
-    if (nm %in% c("[", "[[") && n == 3L) aw_unsupported("matrix indexing is planned for slice 2", e)
+    if (nm %in% c("[", "[[") && n > 3L) aw_unsupported("arrays of more than two dimensions are outside subset v0", e)
     if (nm == "log" && n == 2L) aw_unsupported("log() with a base is planned for slice 2", e)
     if (nm == "sum" && n > 1L) aw_unsupported("sum() of several arguments or with na.rm is planned for slice 2", e)
     aw_unsupported(sprintf("`%s` with %d argument(s)", nm, n), e)
@@ -161,7 +177,7 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
   an <- names(args)
   if (!is.null(an) && any(nzchar(an))) {
     ok <- an[nzchar(an)] %in% aw_argnames[[nm]]
-    if (!all(ok) || n != 1L) aw_unsupported("a named argument", e)
+    if (!all(ok) || anyDuplicated(an[nzchar(an)])) aw_unsupported("a named argument", e)
   }
   s$calls <- c(s$calls, nm)
 
@@ -179,15 +195,17 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
         return(union(defs, t))
       }
       if (is.call(tgt) && is.symbol(tgt[[1L]]) && as.character(tgt[[1L]]) %in% c("[", "[[")) {
-        if (length(tgt) == 4L) aw_unsupported("matrix sub-assignment is planned for slice 2", e)
-        if (length(tgt) != 3L || !is.symbol(tgt[[2L]]))
+        if (!(length(tgt) %in% 3:4) || !is.symbol(tgt[[2L]]))
           aw_unsupported("this form of sub-assignment", e)
+        if (length(tgt) == 4L && (identical(tgt[[3L]], quote(expr = )) || identical(tgt[[4L]], quote(expr = ))))
+          aw_unsupported("assigning a row or column of a matrix is planned for a later slice", e)
         x <- as.character(tgt[[2L]])
         if (!(x %in% defs)) aw_unsupported(sprintf("sub-assignment into '%s' before it is assigned", x), e)
         s$vec <- c(s$vec, x)
         s$subassigned <- c(s$subassigned, x)
         s$calls <- c(s$calls, paste0(as.character(tgt[[1L]]), "<-"))
-        return(aw_walk(tgt[[3L]], defs, s))
+        for (k in 3:length(tgt)) defs <- aw_walk(tgt[[k]], defs, s)
+        return(defs)
       }
       aw_unsupported("replacement functions such as names(x) <- v", e)
     },
@@ -249,7 +267,13 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
     "[" = , "[[" = {
       if (!is.symbol(args[[1L]])) aw_unsupported("indexing a computed value is planned for slice 2", e)
       s$vec <- c(s$vec, as.character(args[[1L]]))
-      for (a in args) defs <- aw_walk(a, defs, s)
+      empty <- logical(n)
+      for (k in seq_len(n)) empty[k] <- identical(args[[k]], quote(expr = ))
+      if (n == 3L && nm == "[" && sum(empty) == 1L) {
+        for (k in which(!empty)) defs <- aw_walk(args[[k]], defs, s)
+        return(defs)
+      }
+      for (k in seq_along(args)) defs <- aw_walk(args[[k]], defs, s)
       defs
     },
     {

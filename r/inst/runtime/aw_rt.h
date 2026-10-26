@@ -18,11 +18,14 @@ static int aw_res_type = 0;   /* 0 none, 1 double, 2 integer, 3 logical, 4 NULL 
 static void *aw_res_buf = NULL;
 static int64_t aw_res_len = 0;
 static int aw_res_oom = 0;
+static int64_t aw_res_nr = -1, aw_res_nc = -1;   /* dimensions of a matrix result */
 
 static void aw_res_set(int type, const void *data, int64_t len, size_t size)
 {
     free(aw_res_buf);
     aw_res_buf = NULL;
+    aw_res_nr = -1;
+    aw_res_nc = -1;
     aw_res_type = type;
     aw_res_len = len;
     if (len > 0) {
@@ -39,6 +42,9 @@ static void aw_ret_dbl1(double x) { aw_res_set(1, &x, 1, sizeof(double)); }
 static void aw_ret_int1(int32_t x) { aw_res_set(2, &x, 1, sizeof(int32_t)); }
 static void aw_ret_lgl1(int32_t x) { aw_res_set(3, &x, 1, sizeof(int32_t)); }
 static void aw_ret_null(void) { aw_res_set(4, NULL, 0, 1); }
+static void aw_ret_dblm(sl_f64 x, int64_t nr, int64_t nc) { aw_ret_dbl(x); aw_res_nr = nr; aw_res_nc = nc; }
+static void aw_ret_intm(sl_i32 x, int64_t nr, int64_t nc) { aw_ret_int(x); aw_res_nr = nr; aw_res_nc = nc; }
+static void aw_ret_lglm(sl_i32 x, int64_t nr, int64_t nc) { aw_ret_lgl(x); aw_res_nr = nr; aw_res_nc = nc; }
 
 /* sum() of doubles: one extended-precision accumulator, in order, as ?sum
  * documents; an accumulator beyond the double range gives +/-Inf. */
@@ -59,17 +65,21 @@ static int aw_isna(double x)
     return isnan(x) && (uint32_t) (u & 0xFFFFFFFFu) == 1954u;
 }
 
-/* mean() of doubles: an extended-precision sum divided by n, then, when that
- * is finite, a second pass that adds the mean of the residuals. Unlike sum(),
- * the result is NA whenever x holds an NA, whichever NaN the sum kept. */
+/* mean() of doubles: an extended-precision sum divided by n; when the sum is
+ * not finite (it may only have overflowed), the sum of the terms x[i] / n
+ * instead; then, when finite, a second pass adding the mean of the residuals.
+ * Verified against GNU R on x86-64 and arm64, including NA and NaN data. */
 static double aw_rmean(sl_f64 x)
 {
     long double s = 0.0;
     for (int64_t i = 0; i < x.len; i++) s += x.data[i];
-    if (isnan((double) s)) {
-        for (int64_t i = 0; i < x.len; i++) if (aw_isna(x.data[i])) return x.data[i];
+    if (isfinite((double) s)) {
+        s /= x.len;
+    } else {
+        long double t = 0.0;
+        for (int64_t i = 0; i < x.len; i++) t += x.data[i] / x.len;
+        s = t;
     }
-    s /= x.len;
     if (isfinite((double) s)) {
         long double t = 0.0;
         for (int64_t i = 0; i < x.len; i++) t += x.data[i] - s;
@@ -109,11 +119,13 @@ static double aw_rextreme(sl_f64 x, int32_t want_max)
 }
 
 /* Called by the shim after the entry returns: hands over the result buffer. */
-int aw_res_take(void **buf, int64_t *len)
+int aw_res_take(void **buf, int64_t *len, int64_t *nr, int64_t *nc)
 {
     int t = aw_res_oom ? -1 : aw_res_type;
     *buf = aw_res_buf;
     *len = aw_res_len;
+    *nr = aw_res_nr;
+    *nc = aw_res_nc;
     aw_res_buf = NULL;
     aw_res_len = 0;
     aw_res_type = 0;

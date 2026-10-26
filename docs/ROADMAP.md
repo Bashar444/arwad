@@ -25,8 +25,8 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 | 1.3 | `aw_compile(f)` for [spec/subset-v0.md](../spec/subset-v0.md), with fallback and a recorded reason | ◐ slice 1 of the subset (see the status column in the spec) |
 | 1.4 | Build paths: an optimising C compiler through `R CMD SHLIB` (fallback); a direct-compiler path with the Goose runtime compiled once; dispatch checked in C; TinyCC for interactive use | ◐ direct path and C-side dispatch done: first call about 1 s per signature (was 3.8–5.3 s), 4.5 µs per call (was 33 µs); loops 11–33× faster than R's byte code ([bench/phase1/REPORT.md](../bench/phase1/REPORT.md)); TinyCC pending |
 | 1.5 | Bit-exact R random-number generation in the static tier (Mersenne-Twister, inversion normals, rejection `sample()`) | planned |
-| 1.6 | Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test | ◐ 59 functions ([`r/inst/corpus/`](../r/inst/corpus/)), all native and bit-identical to GNU R |
-| 1.7 | Slice 2: vectorised arithmetic with recycling, `mean`/`min`/`max`, `c()`, masks and index vectors (2a); matrices and `m[i, j]`, `%*%`, `t`, `crossprod`, `solve` through LAPACK (2b) | ◐ 2a done (26 Oct 2026); 2b next |
+| 1.6 | Test corpus of 200 functions (hand-written, agent-generated, and mined from CRAN where licences allow), each with an equivalence test | ◐ 72 functions ([`r/inst/corpus/`](../r/inst/corpus/)), all native and bit-identical to GNU R |
+| 1.7 | Slice 2: vectorised arithmetic with recycling, `mean`/`min`/`max`, `c()`, masks and index vectors (2a); matrices and `m[i, j]`, `%*%`, `t`, `crossprod`, `solve` through LAPACK (2b) | ◐ 2a done; 2b part 1 (matrices, `m[i, j]`, `t()`) done (26 Oct 2026); part 2 (`%*%`, `crossprod`, `solve`) next |
 
 **Exit:** every corpus function either compiles or falls back correctly; all compiled functions match GNU R within 1e-9; no memory errors under AddressSanitizer.
 

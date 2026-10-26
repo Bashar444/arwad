@@ -14,7 +14,7 @@ test_that("constructs outside the subset fall back with a reason", {
   expect_match(reason(function(x) paste(x)), "call to `paste` is not in subset v0")
   expect_match(reason(function(x) x + y), "free variable 'y'")
   expect_match(reason(function(x) { if (x > 0) y <- 1; y }), "may be used before it is assigned")
-  expect_match(reason(function(m) m[1, 2]), "matrix indexing")
+  expect_match(reason(function(m) m[1, 2, 3]), "more than two dimensions")
   expect_match(reason(function(x) "a"), "character constant")
   expect_match(reason(function(x) { f <- function(y) y; f(x) }), "closures")
   expect_match(reason(function(x, n = length(x)) n), "default of argument 'n' is not a constant")

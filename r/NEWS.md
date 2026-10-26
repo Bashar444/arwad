@@ -1,3 +1,16 @@
+# arwad 0.0.0.9003
+
+* Compiler slice 2b, part 1, matrices: matrix arguments and locals,
+  `matrix()`, `m[i, j]` read and write, rows and columns, `t()`, `nrow()`,
+  `ncol()`, `dim()`, and elementwise arithmetic that keeps dimensions.
+  Results are returned with their `dim` attribute.
+* `mean()` now follows GNU R's algorithm, including its fallback to the sum
+  of `x[i] / n` when the plain sum is not finite (found by CI on macOS
+  arm64, where `long double` is `double`).
+* Compiled `+` and `*` return a quieted `NA` or `NaN`, as R's arithmetic
+  does; arm64 hardware otherwise favours R's signalling `NA_real_`.
+* Corpus: 72 functions.
+
 # arwad 0.0.0.9002
 
 * Compiler slice 2a, vectors: vectorised arithmetic, comparison, logic and

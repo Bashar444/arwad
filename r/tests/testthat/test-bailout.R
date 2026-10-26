@@ -66,6 +66,23 @@ test_that("vector cases that R warns or errors about are left to R", {
   expect_error(pos(c(1, 2)), "the condition has length > 1")
 })
 
+test_that("matrix cases that R warns or errors about are left to R", {
+  skip_if_no_toolchain()
+  add <- aw_compile(function(a, b) a + b)
+  m <- matrix(1:6, 2)
+  expect_identical(add(m, m), m + m)
+  expect_error(add(m, matrix(1:4, 2)), "non-conformable arrays")
+  get <- aw_compile(function(m, i, j) m[i, j])
+  expect_identical(get(m, 2L, 3L), 6L)
+  expect_error(get(m, 3L, 1L), "subscript out of bounds")
+  mk <- aw_compile(function(x, r, c) matrix(x, r, c))
+  expect_identical(mk(1:4, 2, 2), matrix(1:4, 2, 2))
+  expect_warning(v <- mk(1:3, 2, 2), "not a sub-multiple")
+  expect_identical(v, suppressWarnings(matrix(1:3, 2, 2)))
+  named <- matrix(1:4, 2, dimnames = list(c("a", "b"), NULL))
+  expect_identical(add(named, named), named + named)
+})
+
 test_that("seq_len() of a negative number gives R's error", {
   skip_if_no_toolchain()
   g <- aw_compile(function(n) { s <- 0L; for (i in seq_len(n)) s <- s + 1L; s })

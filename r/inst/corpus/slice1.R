@@ -140,5 +140,8 @@ list(
     inputs = list(list(3), list(4))),
   na_meets_nan = list(
     f = function(a, b) { s <- a + b; s * b },
-    inputs = list(list(NA_real_, NaN), list(NA_real_, 1), list(NaN, 2), list(1, NA_real_)))
+    inputs = list(list(NA_real_, NaN), list(NA_real_, 1), list(NaN, 2), list(1, NA_real_))),
+  nan_after_na = list(
+    f = function(a, b) b - (a + 1),
+    inputs = list(list(NA_real_, NaN), list(NaN, NA_real_), list(NA_real_, 2)))
 )

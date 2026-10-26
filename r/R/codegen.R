@@ -16,9 +16,13 @@ aw_rank <- c(lgl = 1L, int = 2L, dbl = 3L)
 aw_tname <- c(dbl = "double", int = "integer", lgl = "logical")
 aw_big <- "4503599627370496.0" # 2^52: beyond it doubles are not all integers
 
-aw_val <- function(g, type, kind = "s") list(g = g, type = type, kind = kind)
+# A matrix (kind "m") is a column-major vector plus its dimensions `nr` and
+# `nc`, Goose i64 expressions.
+aw_val <- function(g, type, kind = "s", nr = NULL, nc = NULL) {
+  list(g = g, type = type, kind = kind, nr = nr, nc = nc)
+}
 
-aw_tdesc <- function(v) paste(aw_tname[[v$type]], if (v$kind == "s") "scalar" else "vector")
+aw_tdesc <- function(v) paste(aw_tname[[v$type]], c(s = "scalar", v = "vector", m = "matrix")[[v$kind]])
 
 cx_emit <- function(cx, ...) {
   # Build the line first: building it may emit lines of its own (a conversion
@@ -59,6 +63,11 @@ cx_var_new <- function(cx, nm, type, kind, init = NULL) {
     cx$decls <- c(cx$decls, sprintf("var %s: %s[>..] = [];", g, aw_g[[type]]))
   }
   v <- list(g = g, type = type, kind = kind, ro = FALSE)
+  if (kind == "m") {
+    v$nr <- paste0(g, "_nr")
+    v$nc <- paste0(g, "_nc")
+    cx$decls <- c(cx$decls, sprintf("var %s: i64 = 0;", v$nr), sprintf("var %s: i64 = 0;", v$nc))
+  }
   assign(nm, v, envir = cx$vars)
   v
 }
@@ -142,6 +151,10 @@ cx_assign <- function(cx, nm, v, e) {
   if (v$kind == "s") {
     cx_emit(cx, sprintf("%s = %s;", var$g, v$g))
   } else if (v$g != var$g) {
+    if (v$kind == "m") {
+      cx_emit(cx, sprintf("%s = %s;", var$nr, v$nr))
+      cx_emit(cx, sprintf("%s = %s;", var$nc, v$nc))
+    }
     cx_emit(cx, sprintf("%s.clear();", var$g))
     cx_emit(cx, sprintf("%s.append(%s);", var$g, v$g))
   }
@@ -175,8 +188,8 @@ cx_index_read <- function(cx, x, i, strict, e) {
   cx_scalar(i, e)
   if (i$type == "lgl") aw_unsupported("logical indices are planned for slice 2", e)
   type <- x$type
-  len <- if (x$kind == "v") paste0(x$g, ".len") else "1"
-  elt <- function(k) if (x$kind == "v") sprintf("%s[%s - 1]", x$g, k) else x$g
+  len <- if (x$kind != "s") paste0(x$g, ".len") else "1"
+  elt <- function(k) if (x$kind != "s") sprintf("%s[%s - 1]", x$g, k) else x$g
   t <- cx_tmp(cx)
   k <- cx_tmp(cx)
   if (strict) {
@@ -227,7 +240,7 @@ cx_index_write <- function(cx, nm, i, v, e) {
     cx_write_mask(cx, var, i, cv$g, e)
     return(v)
   }
-  if (i$kind == "v") {
+  if (i$kind != "s") {
     cx_write_gather(cx, var, i, cv$g, e)
     return(v)
   }
@@ -373,7 +386,7 @@ aw_result_type <- function(op, ta, tb = ta) {
   if (ta != "dbl" && tb != "dbl") "int" else "dbl"
 }
 
-cx_len <- function(v) if (v$kind == "v") paste0(v$g, ".len") else "1"
+cx_len <- function(v) if (v$kind != "s") paste0(v$g, ".len") else "1"
 
 # A vector where R needs one value (if, while, &&, a length): GNU R takes over
 # unless it has exactly one element.
@@ -389,7 +402,7 @@ cx_scalarize <- function(cx, v, e) {
 # as R does; GNU R takes over when the lengths are not multiples (R warns).
 cx_elementwise <- function(cx, vals, rtype, e, f) {
   for (v in vals) if (v$type %in% c("null", "exit")) aw_unsupported("an expression without a value used as a value", e)
-  vec <- which(vapply(vals, function(v) v$kind == "v", logical(1)))
+  vec <- which(vapply(vals, function(v) v$kind != "s", logical(1)))
   n <- cx_tmp(cx)
   lens <- vapply(vals, cx_len, "")
   if (length(vec) == 1L) {
@@ -432,12 +445,15 @@ cx_elementwise <- function(cx, vals, rtype, e, f) {
 cx_binop <- function(cx, op, a, b, e) {
   f <- if (op %in% c("==", "!=", "<", "<=", ">", ">=")) cx_compare else if (op %in% c("&", "|")) cx_andor else cx_arith
   if (a$kind == "s" && b$kind == "s") return(f(cx, op, a, b, e))
-  cx_elementwise(cx, list(a, b), aw_result_type(op, a$type, b$type), e, function(x) f(cx, op, x[[1L]], x[[2L]], e))
+  dims <- cx_conform(cx, a, b, e)
+  r <- cx_elementwise(cx, list(a, b), aw_result_type(op, a$type, b$type), e, function(x) f(cx, op, x[[1L]], x[[2L]], e))
+  if (is.null(dims)) r else aw_val(r$g, r$type, "m", dims$nr, dims$nc)
 }
 
 cx_unary <- function(cx, op, v, e) {
   if (v$kind == "s") return(cx_unary1(cx, op, v, e))
-  cx_elementwise(cx, list(v), aw_result_type(op, v$type), e, function(x) cx_unary1(cx, op, x[[1L]], e))
+  r <- cx_elementwise(cx, list(v), aw_result_type(op, v$type), e, function(x) cx_unary1(cx, op, x[[1L]], e))
+  if (v$kind == "m") aw_val(r$g, r$type, "m", v$nr, v$nc) else r
 }
 
 cx_unary1 <- function(cx, op, v, e) {
@@ -476,7 +492,7 @@ cx_andor <- function(cx, op, a, b, e) {
 }
 
 # Element `k` of a vector or scalar value, for reading.
-cx_elt <- function(v, k) if (v$kind == "v") sprintf("%s[%s]", v$g, k) else v$g
+cx_elt <- function(v, k) if (v$kind != "s") sprintf("%s[%s]", v$g, k) else v$g
 
 # The values of several operands, concatenated into one array of `type`.
 cx_concat <- function(cx, vals, type, e) {
@@ -509,7 +525,7 @@ cx_c <- function(cx, vals, e) {
 
 cx_mean <- function(cx, v, e) {
   if (v$type %in% c("null", "exit")) aw_unsupported("mean() of no value", e)
-  arr <- if (v$kind == "v") v$g else cx_concat(cx, list(v), v$type, e)
+  arr <- if (v$kind != "s") v$g else cx_concat(cx, list(v), v$type, e)
   t <- cx_tmp(cx)
   if (v$type == "dbl") {
     cx_emit(cx, sprintf("let %s: f64 = aw_rmean(%s);", t, arr))
@@ -654,7 +670,11 @@ cx_return <- function(cx, v, visible) {
   if (v$type == "null") {
     cx_emit(cx, "aw_ret_null();")
   } else {
-    cx_emit(cx, sprintf("aw_ret_%s%s(%s);", v$type, if (v$kind == "s") "1" else "", v$g))
+    if (v$kind == "m") {
+      cx_emit(cx, sprintf("aw_ret_%sm(%s, %s, %s);", v$type, v$g, v$nr, v$nc))
+    } else {
+      cx_emit(cx, sprintf("aw_ret_%s%s(%s);", v$type, if (v$kind == "s") "1" else "", v$g))
+    }
   }
   cx_emit(cx, if (visible) "return 0;" else "return 1;")
 }
@@ -691,7 +711,7 @@ aw_gen <- function(cx, e, want = TRUE) {
   if (is.symbol(e)) {
     nm <- as.character(e)
     v <- get0(nm, envir = cx$vars, inherits = FALSE)
-    if (!is.null(v)) return(aw_val(v$g, v$type, v$kind))
+    if (!is.null(v)) return(aw_val(v$g, v$type, v$kind, v$nr, v$nc))
     if (nm == "pi") return(aw_val(sprintf("%a", pi), "dbl"))
     if (nm == "T") return(aw_val("1", "lgl"))
     if (nm == "F") return(aw_val("0", "lgl"))
@@ -735,6 +755,7 @@ aw_gen <- function(cx, e, want = TRUE) {
         return(aw_val(var$g, var$type, var$kind))
       }
       v <- aw_gen(cx, a[[2L]])
+      if (length(tgt) == 4L) return(cx_mat_write(cx, as.character(tgt[[2L]]), tgt, v, e))
       i <- aw_gen(cx, tgt[[3L]])
       if (cx_head(tgt) == "[[") i <- cx_scalarize(cx, i, e)
       cx_index_write(cx, as.character(tgt[[2L]]), i, v, e)
@@ -780,7 +801,7 @@ aw_gen <- function(cx, e, want = TRUE) {
       sh <- cx_head(sq)
       if (is.symbol(sq)) {
         x <- aw_gen(cx, sq)
-        if (x$kind == "v") {
+        if (x$kind != "s") {
           src <- x$g
           if (!isTRUE(get0(as.character(sq), envir = cx$vars, inherits = FALSE)$ro)) {
             src <- cx_tmp(cx) # R iterates over the vector as it was when the loop began
@@ -806,7 +827,7 @@ aw_gen <- function(cx, e, want = TRUE) {
           cnt <- cx_count(cx, aw_gen(cx, sq[[2L]]), sq)
         } else {
           x <- aw_gen(cx, sq[[2L]])
-          cnt <- if (x$kind == "v") paste0(x$g, ".len") else "1"
+          cnt <- if (x$kind != "s") paste0(x$g, ".len") else "1"
         }
         cx_open(cx, sprintf("for %s in 0..%s", k, cnt))
         cx_assign(cx, vn, aw_val(sprintf("(%s + 1) as i32", k), "int"), e)
@@ -869,22 +890,26 @@ aw_gen <- function(cx, e, want = TRUE) {
       aw_val(t, "lgl")
     },
     "[" = , "[[" = {
+      if (length(a) == 3L) return(cx_mat_read(cx, a, e))
       x <- aw_gen(cx, a[[1L]])
       i <- aw_gen(cx, a[[2L]])
       if (nm == "[[") i <- cx_scalarize(cx, i, e)
       if (nm == "[" && i$type == "lgl") return(cx_read_mask(cx, x, i, e))
-      if (i$kind == "v") return(cx_read_gather(cx, x, i, e))
+      if (i$kind != "s") return(cx_read_gather(cx, x, i, e))
       cx_index_read(cx, x, i, nm == "[[", e)
     },
     "length" = {
       v <- aw_gen(cx, a[[1L]])
       if (v$type %in% c("null", "exit")) aw_unsupported("length() of no value", e)
       t <- cx_tmp(cx)
-      cx_emit(cx, sprintf("let %s: i32 = %s;", t, if (v$kind == "v") paste0(v$g, ".len as i32") else "1"))
+      cx_emit(cx, sprintf("let %s: i32 = %s;", t, if (v$kind != "s") paste0(v$g, ".len as i32") else "1"))
       aw_val(t, "int")
     },
     "numeric" = , "integer" = , "logical" = cx_ctor(cx, e),
     "sum" = cx_sum(cx, aw_gen(cx, a[[1L]]), e),
+    "matrix" = cx_matrix(cx, aw_match_args(a, c("data", "nrow", "ncol")), e),
+    "nrow" = , "ncol" = , "dim" = cx_dims(cx, nm, aw_gen(cx, a[[1L]]), e),
+    "t" = cx_transpose(cx, aw_gen(cx, a[[1L]]), e),
     aw_unsupported(sprintf("internal: no code generation for `%s`", nm), e)
   )
 }
@@ -897,6 +922,9 @@ aw_rt_externs <- c(
   "extern fn aw_ret_int1(x: i32);",
   "extern fn aw_ret_lgl1(x: i32);",
   "extern fn aw_ret_null();",
+  "extern fn aw_ret_dblm(x: const f64[:], nr: i64, nc: i64);",
+  "extern fn aw_ret_intm(x: const i32[:], nr: i64, nc: i64);",
+  "extern fn aw_ret_lglm(x: const i32[:], nr: i64, nc: i64);",
   "extern fn aw_rsum(x: const f64[:]) -> f64;",
   "extern fn aw_rmean(x: const f64[:]) -> f64;",
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
@@ -933,11 +961,18 @@ aw_codegen <- function(info, f, types, label) {
       cx_var_new(cx, nm, ty$type, "s", init = paste0("p", i))
     } else {
       params <- c(params, sprintf("p%d: const %s[:]", i, aw_g[[ty$type]]))
+      if (ty$kind == "m") params <- c(params, sprintf("p%dr: i64", i), sprintf("p%dc: i64", i))
       if (nm %in% c(info$reassigned, info$subassigned)) {
-        v <- cx_var_new(cx, nm, ty$type, "v")
+        v <- cx_var_new(cx, nm, ty$type, ty$kind)
         copies <- c(copies, sprintf("    %s.append(p%d);", v$g, i))
+        if (ty$kind == "m") copies <- c(copies, sprintf("    %s = p%dr;", v$nr, i), sprintf("    %s = p%dc;", v$nc, i))
       } else {
-        assign(nm, list(g = paste0("p", i), type = ty$type, kind = "v", ro = TRUE), envir = cx$vars)
+        rec <- list(g = paste0("p", i), type = ty$type, kind = ty$kind, ro = TRUE)
+        if (ty$kind == "m") {
+          rec$nr <- paste0("p", i, "r")
+          rec$nc <- paste0("p", i, "c")
+        }
+        assign(nm, rec, envir = cx$vars)
       }
     }
   }
@@ -951,9 +986,11 @@ aw_codegen <- function(info, f, types, label) {
     "",
     "fn aw_isnan(x: f64) -> bool { x != x }",
     "// x + y and x * y keep the first operand's NA or NaN, as GNU R's arithmetic",
-    "// does, whichever operand order the C compiler picks for these commutative ops.",
-    "fn aw_dadd(x: f64, y: f64) -> f64 { if x != x { x } else { x + y } }",
-    "fn aw_dmul(x: f64, y: f64) -> f64 { if x != x { x } else { x * y } }",
+    "// does, whichever operand order the C compiler picks for these commutative ops;",
+    "// x + 0.0 returns it quieted, as an arithmetic result is (arm64 favours",
+    "// signalling NaNs, and R's NA_real_ is stored as one).",
+    "fn aw_dadd(x: f64, y: f64) -> f64 { if x != x { x + 0.0 } else { x + y } }",
+    "fn aw_dmul(x: f64, y: f64) -> f64 { if x != x { x + 0.0 } else { x * y } }",
     "",
     sprintf('export "aw_entry_@H@" fn aw_entry(%s) -> i32 {', paste(params, collapse = ", ")),
     "    let na_i: i32 = -2147483647 - 1;",
@@ -975,15 +1012,21 @@ aw_shim <- function(info, types) {
   pass <- character()
   for (i in seq_len(n)) {
     ty <- types[[i]]
-    get <- c(get, sprintf("    SEXP a%d = VECTOR_ELT(args, %d);", i, i - 1L),
-             sprintf("    if (!aw_arg_ok(a%d, %s, %d)) return ScalarInteger(-1);", i, aw_sexp[[ty$type]],
-                     as.integer(ty$kind == "s")))
+    get <- c(get, sprintf("    SEXP a%d = VECTOR_ELT(args, %d);", i, i - 1L))
+    if (ty$kind == "m") {
+      # Matrix signatures are checked in R (only a dim attribute) before this call.
+      get <- c(get, sprintf("    if (TYPEOF(a%d) != %s || !isMatrix(a%d)) return ScalarInteger(-1);", i, aw_sexp[[ty$type]], i))
+    } else {
+      get <- c(get, sprintf("    if (!aw_arg_ok(a%d, %s, %d)) return ScalarInteger(-1);", i, aw_sexp[[ty$type]],
+                            as.integer(ty$kind == "s")))
+    }
     if (ty$kind == "s") {
       pass <- c(pass, sprintf("%s(a%d)[0]", aw_cptr[[ty$type]], i))
     } else {
       sl <- if (ty$type == "dbl") "sl_f64" else "sl_i32"
       get <- c(get, sprintf("    %s s%d = {%s(a%d), (int64_t) XLENGTH(a%d)};", sl, i, aw_cptr[[ty$type]], i, i))
       pass <- c(pass, sprintf("s%d", i))
+      if (ty$kind == "m") pass <- c(pass, sprintf("(int64_t) nrows(a%d)", i), sprintf("(int64_t) ncols(a%d)", i))
     }
   }
   pass <- c(pass, "NA_REAL", "R_NaN", "R_PosInf")
@@ -1004,7 +1047,7 @@ aw_shim <- function(info, types) {
     "#define AW_HAS_ATTRIB(a) (ATTRIB(a) != R_NilValue)",
     "#endif",
     "",
-    "int aw_res_take(void **buf, int64_t *len);",
+    "int aw_res_take(void **buf, int64_t *len, int64_t *nr, int64_t *nc);",
     "static int aw_ready = 0;",
     "",
     "/* Does an argument fit this unit's signature? If not, the call returns -1",
@@ -1027,8 +1070,8 @@ aw_shim <- function(info, types) {
     get,
     sprintf("    int32_t st = aw_entry_@H@(%s);", paste(pass, collapse = ", ")),
     "    void *buf = NULL;",
-    "    int64_t len = 0;",
-    "    int rt = aw_res_take(&buf, &len);",
+    "    int64_t len = 0, nr = -1, nc = -1;",
+    "    int rt = aw_res_take(&buf, &len, &nr, &nc);",
     '    if (rt < 0) error("arwad: out of memory while returning the result");',
     "    SEXP out = PROTECT(allocVector(VECSXP, 2));",
     "    SET_VECTOR_ELT(out, 0, ScalarInteger(st));",
@@ -1039,6 +1082,13 @@ aw_shim <- function(info, types) {
     "        if (len > 0) {",
     "            if (rt == 1) memcpy(REAL(v), buf, (size_t) len * sizeof(double));",
     "            else memcpy(rt == 2 ? INTEGER(v) : LOGICAL(v), buf, (size_t) len * sizeof(int));",
+    "        }",
+    "        if (nr >= 0) {",
+    "            SEXP dim = PROTECT(allocVector(INTSXP, 2));",
+    "            INTEGER(dim)[0] = (int) nr;",
+    "            INTEGER(dim)[1] = (int) nc;",
+    "            setAttrib(v, R_DimSymbol, dim);",
+    "            UNPROTECT(1);",
     "        }",
     "    }",
     "    free(buf);",

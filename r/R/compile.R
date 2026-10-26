@@ -87,17 +87,25 @@ aw_signature <- function(st, args) {
     a <- args[[i]]
     t <- aw_tcode[typeof(a)]
     if (is.na(t)) return(sprintf("!argument '%s' is of type %s", fm[i], typeof(a)))
-    if (!is.null(attributes(a))) return(sprintf("!argument '%s' has attributes (%s)", fm[i], paste(names(attributes(a)), collapse = ", ")))
     n <- length(a)
     if (n > .Machine$integer.max) return(sprintf("!argument '%s' is a long vector", fm[i]))
+    at <- attributes(a)
+    if (!is.null(at)) {
+      if (identical(names(at), "dim") && length(at$dim) == 2L) {
+        parts[i] <- paste0(t, "[,]")
+        next
+      }
+      return(sprintf("!argument '%s' has attributes (%s)", fm[i], paste(names(at), collapse = ", ")))
+    }
     parts[i] <- paste0(t, if (n != 1L || fm[i] %in% st$info$vec) "[]" else "")
   }
   paste(parts, collapse = ",")
 }
 
 aw_parse_key <- function(key) {
-  lapply(strsplit(key, ",", fixed = TRUE)[[1L]], function(p) {
-    list(type = sub("[]", "", p, fixed = TRUE), kind = if (endsWith(p, "[]")) "v" else "s")
+  lapply(strsplit(gsub("[,]", "[m]", key, fixed = TRUE), ",", fixed = TRUE)[[1L]], function(p) {
+    kind <- if (endsWith(p, "[m]")) "m" else if (endsWith(p, "[]")) "v" else "s"
+    list(type = sub("\\[.*$", "", p), kind = kind)
   })
 }
 
@@ -164,7 +172,8 @@ aw_dispatch <- function(st, ...) {
     names(args) <- st$info$formals
     return(do.call(st$f, args))
   }
-  st$last <- sp
+  # Matrix arguments are checked here, in R (only a dim attribute), not in C.
+  if (!grepl("[,]", key, fixed = TRUE)) st$last <- sp
   res <- aw_dotcall(sp$sym, args)
   s <- res[[1L]]
   if (s == 0L) return(res[[2L]])

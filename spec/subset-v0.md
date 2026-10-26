@@ -48,7 +48,18 @@ Verified by [`r/inst/corpus/slice2.R`](../r/inst/corpus/slice2.R) (20 functions;
 - `c()`, `mean()`, `min()` and `max()` (of several arguments), and `a:b`, `seq_len()`, `seq_along()` as values.
 - Indexing with index vectors (`x[idx]`) and logical masks (`x[x > 0]`), and sub-assignment of a single value through either (`x[x < lo] <- lo`, `x[idx] <- v`).
 - Where R needs one value (`if`, `while`, `&&`, `||`, a length, the ends of `a:b`, `[[`), a vector of another length is left to GNU R.
-- `mean()` is `NA` whenever its argument holds an `NA`, as GNU R's is (unlike `sum()`, whose `NA` or `NaN` follows the hardware); `min()` and `max()` follow `?Extremes` (NA before NaN, the first of equal values such as `0` and `-0`).
+- `mean()` follows GNU R's algorithm: an extended-precision sum divided by n; when that sum is not finite (it may only have overflowed), the sum of the terms `x[i] / n`; then, when finite, a correction by the mean of the residuals. Its `NA` or `NaN` with mixed data therefore follows the hardware, as in R (an `NA` wins on x86-64; the first one wins on arm64). `min()` and `max()` follow `?Extremes` (NA before NaN, the first of equal values such as `0` and `-0`).
+- Compiled `+` and `*` return the first operand's `NA` or `NaN` quieted, as an arithmetic result is: R's `NA_real_` is stored as a signalling NaN, which arm64 hardware would otherwise favour.
+
+### Compiler slice 2b, part 1 (26 October 2026): matrices
+
+Verified by [`r/inst/corpus/slice2b.R`](../r/inst/corpus/slice2b.R) (12 functions; 72 in all):
+
+- Matrix arguments (double, integer or logical, with a `dim` attribute and no other) and matrix locals; `matrix(data, nrow, ncol)` by column; `nrow()`, `ncol()`, `dim()`, `length()`, `t()`.
+- `m[i, j]` read and write, and `m[i, ]` and `m[, j]` read (dropping to vectors, as R's default).
+- Elementwise arithmetic, comparison, logic and math on matrices, with a scalar, a vector or a matrix of equal dimensions, keeping the dimensions.
+- Left to GNU R: non-conformable operands, subscripts out of bounds or `NA`, data that do not fill a matrix a whole number of times, and matrices with `dimnames` or other attributes.
+- Not yet: `%*%`, `crossprod`, `solve` (part 2, through R's own BLAS and LAPACK), vector subscripts of matrices, `byrow`.
 
 ## Not in version 0 (falls back to R)
 
