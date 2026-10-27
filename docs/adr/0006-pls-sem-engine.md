@@ -1,0 +1,32 @@
+# ADR-0006: PLS-SEM engine matched to seminr by black-box tests
+
+- **Status:** Accepted
+- **Date:** 2026-10-27
+
+## Context
+
+The third Phase 2 engine is the PLS-SEM path algorithm with its bootstrap, the method behind most PLS-SEM studies in management research and the first engine planned for the PalmyraDoor research portal. The reference implementation in R is `seminr` (Ray, Danks and Calero Valdez; GPL-3). Researchers report `seminr` results, so the engine has to give the same numbers, not merely close ones. `seminr` is GPL-3 and Arwad is MIT, so the clean-room rule of [ADR-0003](0003-mit-licence-dco-clean-room.md) applies to it as it does to GNU R.
+
+## Decision
+
+1. **Algorithm from the literature, rounding from black-box tests.** The kernel `aw_pls_kernel()` (in `r/R/engines.R`, written in the compilable subset) implements the PLS path algorithm as published (Wold, 1982; Lohmöller, 1989; Hair, Hult, Ringle and Sarstedt, *A Primer on PLS-SEM*, 4th ed.): Mode A outer weights, the path weighting inner scheme, standardised indicators, convergence on the sum of absolute weight changes. Where the literature leaves a numerical choice open, the choice was settled by comparing `seminr` 2.5.0's outputs with candidate formulas on many inputs, including `seminr`'s exported and internal functions called as black boxes on our own inputs:
+   - indicators and scores are standardised as `scale()` does (mean by `colMeans()`, divisor `sqrt(sum(x^2)/(n - 1))`); each iteration standardises the scores and the inner proxies;
+   - weights are normalised by the uncentred root mean square of their scores, `sqrt(sum(y^2)/(n - 1))` (300 of 300 random inputs identical);
+   - the iteration count reported is the number of updates minus one; `maxIt` allows `maxIt + 1` updates;
+   - loadings are `cov(Z, Y)` on the final, unrescaled scores; R² is `1 - 1 / solve(S)[k + 1, k + 1]` for the correlation matrix `S` of (antecedents, construct);
+   - bootstrap resample `b` is `sample.int(n, replace = TRUE)` after `set.seed(seed + b)`, which is why `seminr`'s results do not depend on the number of cores; without a seed, `seminr` draws one with `sample.int(100000, 1)`;
+   - HTMT uses absolute correlations.
+2. **Three compiled builtins** were added for the kernel, each matched to GNU R by black-box tests: `colMeans()`, and `cov()` and `cor()` of two vectors (the corrected two-pass mean of Chan, Golub and LeVeque, 1983; extended-precision deviations and sums; a correlation's standard deviations are rounded from an extended-precision square root).
+3. **Native, and checked to be native.** `aw_compile()` falls back to GNU R without an error when a function leaves the subset; the first draft of the kernel did (it assigned whole matrix columns), so the first benchmark timed interpreted R. The kernel now assigns elements, and the tests assert that the engine's unit is compiled and that no call bailed out (`aw_explain()`).
+4. **Scope of the native path:** Mode A (composite or reflective), path weighting, complete numeric data, no interaction terms or higher-order constructs. Anything else is passed to `seminr::bootstrap_model()` itself, and the result says so (`native = FALSE`).
+5. **What is claimed.** Bit-identical to `seminr`: outer weights, loadings, path coefficients, iteration count and final weight change of the estimate; the bootstrap arrays of path coefficients, total effects, loadings and weights and their descriptive tables. Not bit-identical: HTMT, which agrees to within two units in the last place (relative difference below 4.5e-16); the exact summation order `seminr` uses for it was not found by black-box search, and this is stated wherever the engine is described.
+
+## Clean-room record
+
+`seminr` stores its inner-weighting function in every fitted model, so printing a model object during the first probe displayed the body of `path_weighting()`; printing `seminr::mode_A` to see whether it was a constant displayed its one-line body. Both state textbook definitions (regression coefficients on antecedents and correlations with successors; Mode A weights as covariances with the inner proxy). No other `seminr` source was read; every other numerical detail above was established from outputs only. No `seminr` code is copied, translated or paraphrased in this repository.
+
+## Consequences
+
+- `aw_boot_pls(model, nboot, seed)` is a drop-in replacement for `seminr::bootstrap_model()` that returns a `boot_seminr_model` object, so `summary()` and `seminr`'s plots work on it.
+- `seminr` becomes a suggested package; the tests compare against it on 54 models (8 on `seminr`'s own datasets, 46 seeded synthetic ones) on Linux, macOS and Windows.
+- Mode B, the factorial and centroid schemes, PLSc, interaction terms and higher-order constructs are the next candidates for the native path.

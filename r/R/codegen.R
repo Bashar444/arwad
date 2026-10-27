@@ -1002,6 +1002,11 @@ aw_gen <- function(cx, e, want = TRUE) {
       m <- aw_match_args(a, c("a", "b"))
       cx_solve(cx, aw_gen(cx, m$a), if (!is.null(m$b)) aw_gen(cx, m$b), e)
     },
+    "colMeans" = cx_colmeans(cx, aw_gen(cx, a[[1L]]), e),
+    "cov" = , "cor" = {
+      m <- aw_match_args(a, c("x", "y"))
+      cx_cov2(cx, nm, aw_gen(cx, m$x), aw_gen(cx, m$y), e)
+    },
     aw_unsupported(sprintf("internal: no code generation for `%s`", nm), e)
   )
 }
@@ -1026,6 +1031,8 @@ aw_rt_externs <- c(
   "extern fn aw_dadd(x: f64, y: f64) -> f64;",
   "extern fn aw_dmul(x: f64, y: f64) -> f64;",
   "extern fn aw_rmean(x: const f64[:]) -> f64;",
+  "extern fn aw_colmeans(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
+  "extern fn aw_cov2(x: const f64[:], y: const f64[:], cor: i32) -> f64;",
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
   "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
   "extern fn aw_pow(x: f64, y: f64) -> f64;",

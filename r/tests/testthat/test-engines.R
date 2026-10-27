@@ -203,3 +203,107 @@ test_that("aw_boot_glm() equals the same bootstrap loop in R on 50 designs, warn
   b <- aw_boot_glm(cbind(intercept = 1, wt = mtcars$wt), mtcars$vs, family = binomial(), B = 3)
   expect_identical(colnames(b), c("intercept", "wt"))
 })
+
+test_that("colMeans(), cov() and cor() compile and match R bit for bit", {
+  skip_if_no_toolchain()
+  fc <- aw_compile(function(x, y) cov(x, y))
+  fr <- aw_compile(function(x, y) cor(x, y))
+  fm <- aw_compile(function(X) colMeans(X))
+  set.seed(7)
+  for (t in seq_len(300L)) {
+    n <- sample(c(2:9, 40L, 300L), 1L)
+    x <- (if (t %% 3L == 0L) 1e8 else stats::runif(1L, -5, 5)) + stats::rnorm(n, 0, 10^stats::runif(1L, -3, 2))
+    y <- if (t %% 4L == 0L) -2 * x + 3 else 0.4 * x + stats::rnorm(n, 0, 10^stats::runif(1L, -3, 2))
+    expect_true(identical(fc(x, y), stats::cov(x, y), num.eq = FALSE), label = paste("cov", t))
+    expect_true(identical(fr(x, y), stats::cor(x, y), num.eq = FALSE), label = paste("cor", t))
+    M <- cbind(x, y, x * y)
+    dimnames(M) <- NULL
+    expect_true(identical(fm(M), colMeans(M), num.eq = FALSE), label = paste("colMeans", t))
+  }
+  expect_identical(fc(c(1, NA, 3), c(2, 5, 1)), stats::cov(c(1, NA, 3), c(2, 5, 1)))
+  expect_identical(suppressWarnings(fr(c(1, 1, 1), c(2, 5, 1))), suppressWarnings(stats::cor(c(1, 1, 1), c(2, 5, 1))))
+})
+
+aw_pls_fit_models <- function() {
+  lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
+}
+
+test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at least 50 models", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  fits <- aw_pls_fit_models()
+  native <- 0L
+  for (nm in names(fits)) {
+    m <- fits[[nm]]
+    s <- aw_pls_spec(m)
+    if (is.null(s)) {
+      expect_true(any(m$mmMatrix[, "type"] != "A"), label = paste(nm, "is outside the native subset only for its PLSc constructs"))
+      next
+    }
+    native <- native + 1L
+    o <- aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
+    p <- length(s$items)
+    pJ <- p * length(s$cons)
+    JJ <- length(s$cons)^2
+    at <- cbind(s$items, s$cons[s$blk])
+    expect_true(identical(o[1L, seq_len(p)], unname(m$outer_weights[at]), num.eq = FALSE), label = paste(nm, "weights"))
+    expect_true(identical(o[1L, p + seq_len(pJ)], as.vector(unname(m$outer_loadings[s$items, s$cons])), num.eq = FALSE),
+                label = paste(nm, "loadings, signed zeros included"))
+    expect_true(identical(o[1L, p + pJ + seq_len(JJ)], as.vector(m$path_coef[s$cons, s$cons]), num.eq = FALSE),
+                label = paste(nm, "paths"))
+    expect_identical(as.integer(o[1L, p + pJ + 3L * JJ + 1L]), m$iterations, label = paste(nm, "iterations"))
+    expect_true(identical(o[1L, p + pJ + 3L * JJ + 2L], m$weightDiff, num.eq = FALSE), label = paste(nm, "weight change"))
+  }
+  expect_gte(native, 50L)
+})
+
+test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  fits <- aw_pls_fit_models()
+  expect_gte(length(fits), 50L)
+  exact <- c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives",
+             "loadings_descriptives", "weights_descriptives", "total_paths_descriptives", "boots", "seed")
+  for (k in seq_along(fits)) {
+    nm <- names(fits)[k]
+    want <- suppressMessages(seminr::bootstrap_model(fits[[nm]], nboot = 3L, cores = 1L, seed = k))
+    got <- aw_boot_pls(fits[[nm]], nboot = 3L, seed = k)
+    expect_identical(got$native, !is.null(aw_pls_spec(fits[[nm]])), label = paste(nm, "native"))
+    for (f in exact) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(nm, f))
+    expect_identical(is.na(got$boot_HTMT), is.na(want$boot_HTMT), label = paste(nm, "HTMT pattern"))
+    ok <- !is.na(want$boot_HTMT)
+    expect_lte(max(0, abs(got$boot_HTMT[ok] - want$boot_HTMT[ok]) / abs(want$boot_HTMT[ok])), 4 * .Machine$double.eps,
+               label = paste(nm, "HTMT within a few units in the last place"))
+  }
+  # The comparisons above are with native code, not with GNU R running the
+  # kernel after a static fallback or a bailout.
+  u <- aw_pls_unit()
+  expect_s3_class(u, "arwad_function")
+  utils::capture.output(info <- aw_explain(u))
+  expect_gt(sum(info$calls), 50L)
+  expect_identical(sum(info$bailouts), 0L)
+})
+
+test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() does, and hands other models to seminr", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  m <- aw_pls_fit_models()[["mobi_ecsi_core"]]
+  set.seed(77)
+  want <- suppressMessages(seminr::bootstrap_model(m, nboot = 4L, cores = 1L))
+  seed_want <- .Random.seed
+  set.seed(77)
+  got <- aw_boot_pls(m, nboot = 4L)
+  expect_identical(.Random.seed, seed_want)
+  expect_identical(got$seed, want$seed)
+  expect_identical(got$boot_paths, want$boot_paths)
+  sg <- summary(got)
+  sw <- summary(want)
+  for (f in c("bootstrapped_paths", "bootstrapped_weights", "bootstrapped_loadings", "bootstrapped_total_paths"))
+    expect_identical(sg[[f]], sw[[f]], label = paste("summary()", f))
+  mb <- suppressMessages(seminr::estimate_pls(seminr::mobi, seminr::constructs(
+    seminr::composite("Image", seminr::multi_items("IMAG", 1:5), weights = seminr::mode_B),
+    seminr::composite("Value", seminr::multi_items("PERV", 1:2))), seminr::relationships(seminr::paths(from = "Image", to = "Value"))))
+  fb <- suppressMessages(aw_boot_pls(mb, nboot = 3L, seed = 1L))
+  expect_false(fb$native)
+  expect_identical(fb$boot_paths, suppressMessages(seminr::bootstrap_model(mb, nboot = 3L, cores = 1L, seed = 1L))$boot_paths)
+})

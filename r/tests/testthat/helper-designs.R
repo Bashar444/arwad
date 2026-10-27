@@ -53,3 +53,90 @@ aw_with_warnings <- function(expr) {
   })
   list(value = v, warnings = w)
 }
+
+# PLS-SEM models for the seminr comparison: models on seminr's own datasets
+# (ECSI mobile phone data, the corporate reputation data of Hair et al.'s
+# Primer, the influencer data) and seeded synthetic models with 2 to 7
+# constructs, 1 to 6 indicators each, n from 40 to 800, Likert-type and
+# rescaled data, shuffled declaration and path orders, Mode A composites (and
+# one reflective model, which seminr estimates by PLSc and aw_boot_pls() hands
+# back to seminr), and seminr's default maxIt (300) or the 3,000 the
+# Primer recommends.
+aw_pls_models <- function() {
+  if (!requireNamespace("seminr", quietly = TRUE)) return(list())
+  blk <- function(nm, items, refl) if (refl) seminr::reflective(nm, items) else seminr::composite(nm, items)
+  mm <- function(blocks, refl = rep(FALSE, length(blocks))) do.call(seminr::constructs, unname(Map(blk, names(blocks), blocks, refl)))
+  sm <- function(...) {
+    e <- rbind(...)
+    do.call(seminr::relationships, lapply(seq_len(nrow(e)), function(r) seminr::paths(from = e[r, 1L], to = e[r, 2L])))
+  }
+  it <- function(stem, k) paste0(stem, k)
+  mobi <- seminr::mobi
+  ecsi <- list(Image = it("IMAG", 1:5), Expectation = it("CUEX", 1:3), Value = it("PERV", 1:2), Satisfaction = it("CUSA", 1:3))
+  ecsi_sm <- sm(c("Image", "Value"), c("Expectation", "Value"), c("Image", "Satisfaction"), c("Expectation", "Satisfaction"),
+                c("Value", "Satisfaction"))
+  full <- list(Image = it("IMAG", 1:5), Expectation = it("CUEX", 1:3), Quality = it("PERQ", 1:7), Value = it("PERV", 1:2),
+               Satisfaction = it("CUSA", 1:3), Complaints = "CUSCO", Loyalty = it("CUSL", 1:3))
+  full_sm <- sm(c("Image", "Expectation"), c("Image", "Satisfaction"), c("Image", "Loyalty"), c("Expectation", "Quality"),
+                c("Expectation", "Value"), c("Expectation", "Satisfaction"), c("Quality", "Value"), c("Quality", "Satisfaction"),
+                c("Value", "Satisfaction"), c("Satisfaction", "Complaints"), c("Satisfaction", "Loyalty"), c("Complaints", "Loyalty"))
+  cr <- list(COMP = it("comp_", 1:3), LIKE = it("like_", 1:3), CUSA = "cusa", CUSL = it("cusl_", 1:3))
+  cr_sm <- sm(c("COMP", "CUSA"), c("LIKE", "CUSA"), c("COMP", "CUSL"), c("LIKE", "CUSL"), c("CUSA", "CUSL"))
+  crx <- c(list(QUAL = it("qual_", 1:8), PERF = it("perf_", 1:5), CSOR = it("csor_", 1:5), ATTR = it("attr_", 1:3)), cr)
+  crx_sm <- sm(c("QUAL", "COMP"), c("PERF", "COMP"), c("CSOR", "COMP"), c("ATTR", "COMP"), c("QUAL", "LIKE"), c("PERF", "LIKE"),
+               c("CSOR", "LIKE"), c("ATTR", "LIKE"), c("COMP", "CUSA"), c("LIKE", "CUSA"), c("COMP", "CUSL"), c("LIKE", "CUSL"),
+               c("CUSA", "CUSL"))
+  inf <- list(SIC = it("sic_", 1:7), PQ = it("pq_", 1:4), PL = it("pl_", 1:4), PI = it("pi_", 1:5), WTP = "wtp")
+  inf_sm <- sm(c("SIC", "PQ"), c("SIC", "PL"), c("SIC", "PI"), c("PQ", "PI"), c("PL", "PI"), c("PI", "WTP"))
+  out <- list(
+    mobi_ecsi_core = list(data = mobi, mm = mm(ecsi), sm = ecsi_sm, maxIt = 300L),
+    mobi_ecsi_core_3000 = list(data = mobi, mm = mm(ecsi), sm = ecsi_sm, maxIt = 3000L),
+    mobi_ecsi_reflective = list(data = mobi, mm = mm(ecsi, rep(TRUE, 4L)), sm = ecsi_sm, maxIt = 300L),
+    mobi_ecsi_full = list(data = mobi, mm = mm(full), sm = full_sm, maxIt = 300L),
+    corp_rep_simple = list(data = seminr::corp_rep_data, mm = mm(cr), sm = cr_sm, maxIt = 3000L),
+    corp_rep_extended = list(data = seminr::corp_rep_data, mm = mm(crx), sm = crx_sm, maxIt = 300L),
+    corp_rep2_simple = list(data = seminr::corp_rep_data2, mm = mm(cr), sm = cr_sm, maxIt = 300L),
+    influencer = list(data = seminr::influencer_data, mm = mm(inf), sm = inf_sm, maxIt = 300L))
+  seed <- get0(".Random.seed", envir = globalenv(), inherits = FALSE)
+  set.seed(20261028)
+  for (g in seq_len(46L)) {
+    J <- sample(2:7, 1L)
+    n <- sample(c(40L, 60L, 100L, 150L, 250L, 400L, 800L), 1L)
+    k <- sample(c(1L, 2L, 3L, 3L, 4L, 4L, 5L, 6L), J, replace = TRUE)
+    if (all(k == 1L)) k[1L] <- 3L
+    E <- matrix(integer(), 0L, 2L)
+    for (j in 2:J) {
+      pr <- which(stats::runif(j - 1L) < 0.5)
+      if (!length(pr)) pr <- sample.int(j - 1L, 1L)
+      E <- rbind(E, cbind(pr, j))
+    }
+    if (!1L %in% E) E <- rbind(E, c(1L, J))
+    eta <- matrix(0, n, J)
+    for (j in seq_len(J)) {
+      pr <- E[E[, 2L] == j, 1L]
+      eta[, j] <- stats::rnorm(n) + if (length(pr)) drop(eta[, pr, drop = FALSE] %*% stats::runif(length(pr), -0.6, 0.8)) else 0
+    }
+    cols <- list()
+    blocks <- list()
+    for (j in seq_len(J)) {
+      nm <- paste0("c", j, "_", seq_len(k[j]))
+      blocks[[paste0("C", j)]] <- nm
+      for (i in seq_len(k[j])) {
+        repeat {
+          x <- stats::runif(1L, 0.5, 0.95) * eta[, j] / stats::sd(eta[, j]) + stats::rnorm(n, 0, 0.6)
+          if (g %% 3L == 0L) x <- pmin(pmax(round(4 + 1.2 * x), 1), 7)
+          if (g %% 4L == 1L) x <- x * 10^stats::runif(1L, -1, 2) + stats::runif(1L, -50, 50)
+          if (stats::sd(x) > 0) break
+        }
+        cols[[nm[i]]] <- x
+      }
+    }
+    ord <- sample.int(J)
+    e <- cbind(paste0("C", E[, 1L]), paste0("C", E[, 2L]))[sample.int(nrow(E)), , drop = FALSE]
+    out[[sprintf("sim%02d_J%d_n%d", g, J, n)]] <- list(data = as.data.frame(cols), mm = mm(blocks[ord]),
+                                                      sm = do.call(sm, lapply(seq_len(nrow(e)), function(r) e[r, ])),
+                                                      maxIt = if (g %% 5L == 0L) 3000L else 300L)
+  }
+  if (is.null(seed)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", seed, envir = globalenv())
+  out
+}

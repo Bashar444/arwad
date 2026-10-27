@@ -283,6 +283,36 @@ cx_lmfit_call <- function(cx, call, e) {
   cx_lmfit(cx, aw_gen(cx, m$x), aw_gen(cx, m$y), if (!is.null(m$tol)) aw_gen(cx, m$tol), e)
 }
 
+# colMeans() of a double matrix (a matrix argument has no dimnames here, so
+# the result has no names).
+cx_colmeans <- function(cx, x, e) {
+  if (x$kind != "m") aw_unsupported("colMeans() of a value that is not a matrix", e)
+  if (x$type != "dbl") aw_unsupported("colMeans() of an integer or logical matrix is left to R", e)
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s, 0.0);", t, x$nc))
+  cx_emit(cx, sprintf("if aw_colmeans(%s, %s, %s, %s) != 0 { %s }", x$g, x$nr, x$nc, t,
+                      cx_bail(cx, "colMeans() of non-finite data (R tracks NA and NaN)", e)))
+  aw_val(t, "dbl", "v")
+}
+
+# cov(x, y) and cor(x, y) of two numeric vectors, a single value. Matrices
+# are planned for a later slice; NA, unequal lengths, fewer than two values
+# and zero standard deviations (R gives NA, warns or errors) go to GNU R.
+cx_cov2 <- function(cx, fn, x, y, e) {
+  for (v in list(x, y)) {
+    if (v$type %in% c("null", "exit")) aw_unsupported(sprintf("%s() of no value", fn), e)
+    if (v$kind == "m") aw_unsupported(sprintf("%s() of a matrix is planned for a later slice; use columns", fn), e)
+  }
+  xd <- cx_dbl_data(cx, x, e)
+  yd <- cx_dbl_data(cx, y, e)
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("let %s: f64 = aw_cov2(%s, %s, %d);", t, xd, yd, as.integer(fn == "cor")))
+  cx_emit(cx, sprintf("if aw_isnan(%s) { %s }", t,
+                      cx_bail(cx, sprintf("%s() of NA, unequal lengths, fewer than two values or a zero standard deviation", fn), e)))
+  aw_val(t, "dbl")
+}
+
 # drop(): a matrix with one row or one column becomes a vector, as R drops
 # extents of 1; any other matrix stays a matrix in R and is left to GNU R.
 cx_drop <- function(cx, v, e) {

@@ -27,7 +27,7 @@ aw_arity <- list(
   "!" = 1L, "&" = 2L, "|" = 2L, "&&" = 2L, "||" = 2L,
   "[" = 2:3, "[[" = 2:3, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
   "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
-  "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2,
+  "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2, "colMeans" = 1L, "cov" = 2L, "cor" = 2L,
   "floor" = 1L, "ceiling" = 1L, "runif" = 1:3, "rnorm" = 1:3,
   "sample" = 1:3, "sample.int" = 1:3, "$" = 2L, ".lm.fit" = 2:3, "drop" = 1L,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
@@ -41,10 +41,10 @@ aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
                     matrix = c("data", "nrow", "ncol"), crossprod = c("x", "y"),
                     solve = c("a", "b"), runif = c("n", "min", "max"), rnorm = c("n", "mean", "sd"),
                     sample = c("x", "size", "replace"), sample.int = c("n", "size", "replace"),
-                    .lm.fit = c("x", "y", "tol"))
+                    .lm.fit = c("x", "y", "tol"), colMeans = "x", cov = c("x", "y"), cor = c("x", "y"))
 
 # Compiled functions that do not live in base, by their package.
-aw_home <- c(runif = "stats", rnorm = "stats", .lm.fit = "stats")
+aw_home <- c(runif = "stats", rnorm = "stats", .lm.fit = "stats", cov = "stats", cor = "stats")
 
 # The parts of a .lm.fit() result that compile, taken directly
 # (.lm.fit(x, y)$coefficients) or from a variable (fit <- .lm.fit(x, y);

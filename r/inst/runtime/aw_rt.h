@@ -96,6 +96,53 @@ static double aw_rmean(sl_f64 x)
     return (double) s;
 }
 
+/* colMeans() of a double matrix: per column, an extended-precision sum
+ * divided by the number of rows before rounding. Non-finite data return 1
+ * (left to GNU R, which also keeps track of NA versus NaN). */
+static int32_t aw_colmeans(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
+{
+    for (int64_t j = 0; j < nc; j++) {
+        const double *c = x.data + j * nr;
+        long double s = 0.0;
+        for (int64_t i = 0; i < nr; i++) {
+            if (!isfinite(c[i])) return 1;
+            s += c[i];
+        }
+        z.data[j] = (double) (s / nr);
+    }
+    return 0;
+}
+
+/* cov(x, y) (cor = 0) and cor(x, y) (cor = 1) of two double vectors, as GNU
+ * R computes them for vectors and for two matrices: the corrected two-pass
+ * mean (Chan, Golub and LeVeque, 1983), then the cross-products of the
+ * deviations summed in extended precision and divided by n - 1 before
+ * rounding; a correlation divides that covariance by the two standard
+ * deviations, each the extended-precision square root of its variance,
+ * and is clamped to [-1, 1]. Verified by black-box comparison with GNU R.
+ * Returns NaN where R gives NA, warns or errors (lengths differ, n < 2,
+ * non-finite data, a zero standard deviation): those calls go to R. */
+static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
+{
+    int64_t n = x.len;
+    if (n != y.len || n < 2) return NAN;
+    for (int64_t i = 0; i < n; i++)
+        if (!isfinite(x.data[i]) || !isfinite(y.data[i])) return NAN;
+    long double mx = aw_rmean(x), my = aw_rmean(y), sxy = 0.0;
+    for (int64_t i = 0; i < n; i++) sxy += (x.data[i] - mx) * (y.data[i] - my);
+    double c = (double) (sxy / (n - 1));
+    if (!cor) return c;
+    long double sxx = 0.0, syy = 0.0;
+    for (int64_t i = 0; i < n; i++) sxx += (x.data[i] - mx) * (x.data[i] - mx);
+    for (int64_t i = 0; i < n; i++) syy += (y.data[i] - my) * (y.data[i] - my);
+    double sx = (double) sqrtl(sxx / (n - 1)), sy = (double) sqrtl(syy / (n - 1));
+    if (sx == 0.0 || sy == 0.0) return NAN;
+    double r = c / (sx * sy);
+    if (r > 1.0) r = 1.0;
+    if (r < -1.0) r = -1.0;
+    return r;
+}
+
 /* mean() of integers or logicals: NA if any element is NA. */
 static double aw_imean(sl_i32 x, double na)
 {

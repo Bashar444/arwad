@@ -56,6 +56,297 @@ aw_boot_ols <- function(X, y, B = 1000L) {
   out
 }
 
+# The compiled kernel of aw_boot_pls(): the PLS path algorithm (Wold 1982;
+# Lohmoller 1989) with Mode A outer weights and the path weighting scheme,
+# for every column of `idx` (row indices of one sample each). Each numeric
+# step was matched to seminr 2.5.0 by black-box tests on its outputs; see
+# docs/adr/0006-pls-sem-engine.md. blk[k] is the construct of indicator k;
+# pre[i, j] = m > 0 when construct i is the m-th antecedent of j. One row per
+# sample: the weights (one per indicator), the loadings (p x J, by column;
+# a cross-loading is the covariance times 0, so it keeps seminr's signed
+# zero), path coefficients, total effects and HTMT (J x J each, by column),
+# iterations and the last weight change.
+aw_pls_kernel <- function(X, blk, pre, maxIt, crit, idx) {
+  n <- nrow(X)
+  p <- ncol(X)
+  J <- nrow(pre)
+  R <- ncol(idx)
+  JJ <- J * J
+  pJ <- p * J
+  out <- matrix(0, R, p + pJ + 3L * JJ + 2L)
+  Xb <- matrix(0, n, p)
+  Z <- matrix(0, n, p)
+  W <- matrix(0, p, J)
+  Wn <- matrix(0, p, J)
+  Y <- matrix(0, n, J)
+  Yt <- matrix(0, n, J)
+  E <- matrix(0, J, J)
+  Bm <- matrix(0, J, J)
+  H <- matrix(0, J, J)
+  for (r in seq_len(R)) {
+    for (k in seq_len(p)) for (i in seq_len(n)) Xb[i, k] <- X[idx[i, r], k]
+    # The indicators, standardised as scale() does.
+    cm <- colMeans(Xb)
+    for (k in seq_len(p)) {
+      v <- Xb[, k] - cm[k]
+      s <- sqrt(sum(v^2) / (n - 1))
+      for (i in seq_len(n)) Z[i, k] <- v[i] / s
+    }
+    for (k in seq_len(p)) for (j in seq_len(J)) W[k, j] <- if (blk[k] == j) 1 else 0
+    it <- 0L
+    dw <- 0
+    for (iter in 0:maxIt) {
+      # Outer approximation: standardised construct scores.
+      S <- Z %*% W
+      cm <- colMeans(S)
+      for (j in seq_len(J)) {
+        v <- S[, j] - cm[j]
+        s <- sqrt(sum(v^2) / (n - 1))
+        for (i in seq_len(n)) Y[i, j] <- v[i] / s
+      }
+      # Inner weights, path weighting scheme: correlations with successors,
+      # regression coefficients on antecedents.
+      for (j in seq_len(J)) {
+        na <- 0L
+        for (i in seq_len(J)) {
+          E[i, j] <- 0
+          if (pre[i, j] > 0) na <- na + 1L
+          if (pre[j, i] > 0) E[i, j] <- cor(Y[, i], Y[, j])
+        }
+        if (na > 0L) {
+          Yp <- matrix(0, n, na)
+          for (i in seq_len(J)) if (pre[i, j] > 0) for (t in seq_len(n)) Yp[t, pre[i, j]] <- Y[t, i]
+          bj <- drop(solve(t(Yp) %*% Yp, t(Yp) %*% Y[, j]))
+          for (i in seq_len(J)) if (pre[i, j] > 0) E[i, j] <- bj[pre[i, j]]
+        }
+      }
+      # Inner proxies, standardised; Mode A weights; unit-variance scores.
+      S <- Y %*% E
+      cm <- colMeans(S)
+      for (j in seq_len(J)) {
+        v <- S[, j] - cm[j]
+        s <- sqrt(sum(v^2) / (n - 1))
+        for (i in seq_len(n)) Yt[i, j] <- v[i] / s
+      }
+      for (k in seq_len(p)) for (j in seq_len(J)) Wn[k, j] <- if (blk[k] == j) cov(Z[, k], Yt[, j]) else 0
+      S <- Z %*% Wn
+      for (j in seq_len(J)) {
+        s <- sqrt(sum(S[, j]^2) / (n - 1))
+        for (k in seq_len(p)) Wn[k, j] <- Wn[k, j] / s
+      }
+      dw <- sum(abs(Wn - W))
+      W <- Wn
+      it <- iter
+      if (dw < crit) break
+    }
+    # Final scores (not rescaled), path coefficients, total effects.
+    Y <- Z %*% W
+    for (j in seq_len(J)) {
+      na <- 0L
+      for (i in seq_len(J)) {
+        Bm[i, j] <- 0
+        if (pre[i, j] > 0) na <- na + 1L
+      }
+      if (na > 0L) {
+        Yp <- matrix(0, n, na)
+        for (i in seq_len(J)) if (pre[i, j] > 0) for (t in seq_len(n)) Yp[t, pre[i, j]] <- Y[t, i]
+        bj <- drop(solve(t(Yp) %*% Yp, t(Yp) %*% Y[, j]))
+        for (i in seq_len(J)) if (pre[i, j] > 0) Bm[i, j] <- bj[pre[i, j]]
+      }
+    }
+    Tm <- Bm
+    Pw <- Bm
+    if (J > 1L) for (m in 2:J) {
+      Pw <- Pw %*% Bm
+      Tm <- Tm + Pw
+    }
+    # HTMT (Henseler, Ringle and Sarstedt, 2015) from the indicators: the
+    # mean absolute heterotrait correlation over the geometric mean of the
+    # two mean absolute monotrait correlations (1 for a single indicator).
+    mono <- numeric(J)
+    for (j in seq_len(J)) {
+      mv <- numeric(0)
+      for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == j && a < b) mv <- c(mv, abs(cor(Xb[, a], Xb[, b])))
+      mono[j] <- if (length(mv) > 0L) mean(mv) else 1
+    }
+    for (j in seq_len(J)) for (i in seq_len(J)) {
+      H[i, j] <- NA_real_
+      if (i < j) {
+        hv <- numeric(0)
+        for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == i) hv <- c(hv, abs(cor(Xb[, a], Xb[, b])))
+        H[i, j] <- mean(hv) / sqrt(mono[i] * mono[j])
+      }
+    }
+    for (k in seq_len(p)) out[r, k] <- W[k, blk[k]]
+    for (j in seq_len(J)) for (k in seq_len(p)) {
+      cv <- cov(Z[, k], Y[, j])
+      out[r, p + (j - 1L) * p + k] <- if (blk[k] == j) cv else cv * 0
+    }
+    for (j in seq_len(J)) for (i in seq_len(J)) {
+      q <- (j - 1L) * J + i
+      out[r, p + pJ + q] <- Bm[i, j]
+      out[r, p + pJ + JJ + q] <- Tm[i, j]
+      out[r, p + pJ + 2L * JJ + q] <- H[i, j]
+    }
+    out[r, p + pJ + 3L * JJ + 1L] <- it
+    out[r, p + pJ + 3L * JJ + 2L] <- dw
+  }
+  out
+}
+
+# What the PLS kernel needs from a model estimated by seminr::estimate_pls(),
+# or NULL when the model is outside the native subset: composites with Mode A
+# weights (reflective() constructs are estimated by PLSc), the path weighting scheme, each
+# indicator in one construct, complete numeric data (no interaction terms
+# or higher-order constructs).
+aw_pls_spec <- function(model) {
+  if (!inherits(model, "pls_model")) stop("'seminr_model' must be a model estimated by seminr::estimate_pls()")
+  mm <- model$mmMatrix
+  sm <- model$smMatrix
+  cons <- model$constructs
+  # A matrix when every construct has the same number of indicators.
+  items <- as.vector(model$mmVariables)
+  raw <- model$rawdata
+  if (!is.matrix(mm) || !is.matrix(sm) || !all(mm[, "type"] == "A") || anyDuplicated(mm[, "measurement"]) ||
+      !setequal(mm[, "measurement"], items) || !all(mm[, "construct"] %in% cons) || !all(cons %in% mm[, "construct"]) ||
+      !all(c(sm[, "source"], sm[, "target"]) %in% cons) || !identical(model$inner_weights, seminr::path_weighting) ||
+      !is.data.frame(raw) || !all(items %in% names(raw))) return(NULL)
+  X <- raw[, items, drop = FALSE]
+  if (!all(vapply(X, is.numeric, NA)) || anyNA(X) || nrow(X) < 3L) return(NULL)
+  X <- as.matrix(X)
+  dimnames(X) <- NULL
+  storage.mode(X) <- "double"
+  if (!all(is.finite(X))) return(NULL)
+  J <- length(cons)
+  pre <- matrix(0L, J, J)
+  for (j in seq_len(J)) {
+    src <- sm[sm[, "target"] == cons[j], "source"]
+    pre[match(src, cons), j] <- seq_along(src)
+  }
+  list(X = X, blk = match(mm[match(items, mm[, "measurement"]), "construct"], cons), pre = pre,
+       maxIt = as.integer(model$settings$maxIt), crit = 10^-model$settings$stopCriterion, cons = cons, items = items)
+}
+
+aw_pls_unit <- function() {
+  if (is.null(aw_state$pls)) aw_state$pls <- aw_compile(aw_pls_kernel, name = "aw_pls")
+  aw_state$pls
+}
+
+# Runs the kernel on the samples in idx; NULL when the native run fails (the
+# caller then hands the work to seminr).
+aw_pls_run <- function(spec, idx) {
+  tryCatch(aw_pls_unit()(spec$X, spec$blk, spec$pre, spec$maxIt, spec$crit, idx), error = function(e) NULL)
+}
+
+# The descriptive table seminr attaches to a bootstrap: estimate, bootstrap
+# mean and bootstrap standard deviation for each column, side by side. All
+# rows keep the estimate's row names as they are (a matrix, for weights,
+# when every construct has the same number of indicators).
+aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
+  m <- apply(boot, c(1L, 2L), mean)
+  s <- apply(boot, c(1L, 2L), stats::sd)
+  rn <- if (is.null(rows)) dimnames(est)[[1L]] else rows
+  if (is.null(rows)) rows <- seq_len(nrow(est))
+  out <- cbind(est[rows, cols, drop = FALSE], m[rows, cols, drop = FALSE], s[rows, cols, drop = FALSE])
+  dimnames(out) <- list(rn, c(paste(cols, "PLS Est."), paste(cols, "Boot Mean"), paste(cols, "Boot SD")))
+  class(out) <- c("matrix", "array", "table_output")
+  out
+}
+
+#' Bootstrap a PLS-SEM model, compiled
+#'
+#' A compiled replacement for `seminr::bootstrap_model()`. It takes a model
+#' estimated by `seminr::estimate_pls()` and re-estimates it on `nboot` case
+#' resamples with the PLS path algorithm (path weighting scheme, Mode A
+#' weights, standardised data, the model's `maxIt` and `stopCriterion`),
+#' drawn exactly as `bootstrap_model()` draws them: resample `b` is
+#' `sample.int(n, replace = TRUE)` after `set.seed(seed + b)`. Path
+#' coefficients, total effects, loadings and weights are bit-identical to
+#' `bootstrap_model()`; HTMT ratios agree to within two units in the last
+#' place. The caller's random-number state is left as it was. Models outside
+#' the native subset (Mode B, other weighting schemes, interaction terms,
+#' higher-order constructs, missing data) are passed to
+#' `seminr::bootstrap_model()` itself.
+#'
+#' @param seminr_model A model returned by `seminr::estimate_pls()`.
+#' @param nboot The number of bootstrap resamples.
+#' @param seed The seed; when `NULL`, one is drawn with
+#'   `sample.int(100000, 1)`, as `bootstrap_model()` does.
+#' @return An object of class `boot_seminr_model`, laid out as
+#'   `bootstrap_model()` returns it, so `summary()` and seminr's other
+#'   methods work on it; `native` is `FALSE` when seminr produced it.
+#' @export
+#' @examplesIf requireNamespace("seminr", quietly = TRUE)
+#' library(seminr)
+#' mm <- constructs(composite("Image", multi_items("IMAG", 1:5)),
+#'                  composite("Value", multi_items("PERV", 1:2)),
+#'                  composite("Satisfaction", multi_items("CUSA", 1:3)))
+#' sm <- relationships(paths(from = "Image", to = c("Value", "Satisfaction")),
+#'                     paths(from = "Value", to = "Satisfaction"))
+#' model <- estimate_pls(mobi, mm, sm)
+#' boot <- aw_boot_pls(model, nboot = 200, seed = 123)
+#' summary(boot)$bootstrapped_paths
+aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL) {
+  if (!requireNamespace("seminr", quietly = TRUE)) stop("aw_boot_pls() needs the seminr package")
+  if (is.null(seed)) seed <- sample.int(100000, 1)
+  boots <- nboot
+  nboot <- as.integer(nboot)
+  spec <- aw_pls_spec(seminr_model)
+  delegate <- function() {
+    out <- seminr::bootstrap_model(seminr_model, nboot = nboot, seed = seed)
+    out$native <- FALSE
+    out
+  }
+  if (is.null(spec) || nboot < 1L) return(delegate())
+  n <- nrow(spec$X)
+  had <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  if (had) old <- get(".Random.seed", envir = globalenv())
+  idx <- matrix(0L, n, nboot)
+  for (b in seq_len(nboot)) {
+    set.seed(seed + b)
+    idx[, b] <- sample.int(n, replace = TRUE)
+  }
+  if (had) assign(".Random.seed", old, envir = globalenv()) else rm(".Random.seed", envir = globalenv())
+  res <- aw_pls_run(spec, idx)
+  if (is.null(res)) return(delegate())
+  aw_pls_boot_object(seminr_model, spec, res, nboot, boots, seed)
+}
+
+# Unpacks kernel rows into the arrays and tables of a boot_seminr_model.
+aw_pls_boot_object <- function(model, spec, res, nboot, boots, seed) {
+  cons <- spec$cons
+  items <- spec$items
+  p <- length(items)
+  J <- length(cons)
+  JJ <- J * J
+  pJ <- p * J
+  reps <- as.character(seq_len(nboot))
+  sq <- function(off) array(t(res[, off + seq_len(JJ), drop = FALSE]), c(J, J, nboot), dimnames = list(cons, cons, reps))
+  weights <- array(0, c(p, J, nboot), dimnames = list(items, cons, reps))
+  for (k in seq_len(p)) weights[k, spec$blk[k], ] <- res[, k]
+  out <- model
+  out$boot_paths <- sq(p + pJ)
+  out$boot_loadings <- array(t(res[, p + seq_len(pJ), drop = FALSE]), c(p, J, nboot), dimnames = list(items, cons, reps))
+  out$boot_weights <- weights
+  out$boot_HTMT <- sq(p + pJ + 2L * JJ)
+  out$boot_total_paths <- sq(p + pJ + JJ)
+  src <- cons[cons %in% model$smMatrix[, "source"]]
+  tgt <- cons[cons %in% model$smMatrix[, "target"]]
+  orig <- aw_pls_run(spec, matrix(seq_len(nrow(spec$X)), ncol = 1L))
+  htmt <- matrix(orig[1L, p + pJ + 2L * JJ + seq_len(JJ)], J, J, dimnames = list(cons, cons))
+  total <- matrix(orig[1L, p + pJ + JJ + seq_len(JJ)], J, J, dimnames = list(cons, cons))
+  out$paths_descriptives <- aw_pls_describe(model$path_coef, out$boot_paths, src, tgt)
+  out$loadings_descriptives <- aw_pls_describe(model$outer_loadings, out$boot_loadings)
+  out$weights_descriptives <- aw_pls_describe(model$outer_weights, out$boot_weights)
+  out$HTMT_descriptives <- aw_pls_describe(htmt, out$boot_HTMT)
+  out$total_paths_descriptives <- aw_pls_describe(total, out$boot_total_paths, src, tgt)
+  out$boots <- boots
+  out$seed <- seed
+  out$native <- TRUE
+  class(out) <- c("boot_seminr_model", "seminr_model")
+  out
+}
+
 # The compiled kernel of aw_glm_fit() and aw_boot_glm(): iteratively
 # reweighted least squares for three families with their canonical links,
 # re-implemented from R's documentation (?glm, ?glm.control, ?family) and
