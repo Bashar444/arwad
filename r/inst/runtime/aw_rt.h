@@ -126,16 +126,19 @@ static int32_t aw_colmeans(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
 /* On 64-bit ARM, GNU R's own cov() and cor() round their sums of products
  * as its C compiler vectorises and fuses those loops, which a separate build
  * cannot be relied on to repeat; there the compiled code calls the routine
- * R itself uses (the stats package's registered "cov" and "cor"), so the
+ * R itself calls, .Call(stats:::C_cov or C_cor, x, y, 4L, FALSE), so the
  * result is R's by construction. R's headers are not included here (their
  * Boolean type clashes with macOS headers), so the few entry points are
  * declared directly. */
 #if defined(__aarch64__) || defined(__arm64__)
 #define AW_R_COV 1
 typedef struct SEXPREC *aw_sexp;
-typedef aw_sexp (*aw_covfn)(aw_sexp, aw_sexp, aw_sexp, aw_sexp);
-typedef void *(*aw_dlfn)(void);
-extern aw_dlfn R_FindSymbol(char const *name, char const *pkg, void *symbol);
+extern aw_sexp R_BaseEnv;
+extern aw_sexp Rf_eval(aw_sexp e, aw_sexp env);
+extern aw_sexp Rf_install(char const *name);
+extern aw_sexp Rf_lang3(aw_sexp a, aw_sexp b, aw_sexp c);
+extern aw_sexp Rf_lang6(aw_sexp a, aw_sexp b, aw_sexp c, aw_sexp d, aw_sexp e, aw_sexp f);
+extern void R_PreserveObject(aw_sexp s);
 extern aw_sexp Rf_allocVector(unsigned int type, ptrdiff_t length);
 extern aw_sexp Rf_protect(aw_sexp s);
 extern void Rf_unprotect(int n);
@@ -143,23 +146,31 @@ extern aw_sexp Rf_ScalarInteger(int x);
 extern aw_sexp Rf_ScalarLogical(int x);
 extern double *REAL(aw_sexp x);
 
+static aw_sexp aw_stats_routine(char const *name)
+{
+    aw_sexp e = Rf_protect(Rf_lang3(Rf_install(":::"), Rf_install("stats"), Rf_install(name)));
+    aw_sexp f = Rf_eval(e, R_BaseEnv);
+    R_PreserveObject(f);
+    Rf_unprotect(1);
+    return f;
+}
+
 static double aw_cov2_r(sl_f64 x, sl_f64 y, int32_t cor)
 {
-    static aw_covfn fcov = NULL, fcor = NULL;
+    static aw_sexp fcov = NULL, fcor = NULL;
     if (fcov == NULL) {
-        fcov = (aw_covfn) R_FindSymbol("cov", "stats", NULL);
-        fcor = (aw_covfn) R_FindSymbol("cor", "stats", NULL);
+        fcov = aw_stats_routine("C_cov");
+        fcor = aw_stats_routine("C_cor");
     }
-    aw_covfn f = cor ? fcor : fcov;
-    if (f == NULL) return NAN;
     aw_sexp xs = Rf_protect(Rf_allocVector(14u, (ptrdiff_t) x.len));
     aw_sexp ys = Rf_protect(Rf_allocVector(14u, (ptrdiff_t) y.len));
     memcpy(REAL(xs), x.data, (size_t) x.len * sizeof(double));
     memcpy(REAL(ys), y.data, (size_t) y.len * sizeof(double));
     aw_sexp na = Rf_protect(Rf_ScalarInteger(4)); /* use = "everything" */
     aw_sexp kd = Rf_protect(Rf_ScalarLogical(0));
-    double r = REAL(f(xs, ys, na, kd))[0];
-    Rf_unprotect(4);
+    aw_sexp call = Rf_protect(Rf_lang6(Rf_install(".Call"), cor ? fcor : fcov, xs, ys, na, kd));
+    double r = REAL(Rf_eval(call, R_BaseEnv))[0];
+    Rf_unprotect(5);
     return r;
 }
 #endif
