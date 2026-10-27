@@ -331,14 +331,15 @@ cx_colmeans <- function(cx, x, e) {
   aw_val(t, "dbl", "v")
 }
 
-# cov(x, y) and cor(x, y) of two numeric vectors, a single value. Matrices
-# are planned for a later slice; NA, unequal lengths, fewer than two values
+# cov(x, y) and cor(x, y): of two vectors a single value; when either is a
+# matrix (a vector counts as one column), the matrix of the values for every
+# pair of columns, as R gives it. NA, unequal lengths, fewer than two values
 # and zero standard deviations (R gives NA, warns or errors) go to GNU R.
 cx_cov2 <- function(cx, fn, x, y, e) {
   for (v in list(x, y)) {
     if (v$type %in% c("null", "exit")) aw_unsupported(sprintf("%s() of no value", fn), e)
-    if (v$kind == "m") aw_unsupported(sprintf("%s() of a matrix is planned for a later slice; use columns", fn), e)
   }
+  if (x$kind == "m" || y$kind == "m") return(cx_covmat(cx, fn, x, y, e))
   xd <- cx_dbl_data(cx, x, e)
   yd <- cx_dbl_data(cx, y, e)
   t <- cx_tmp(cx)
@@ -346,6 +347,21 @@ cx_cov2 <- function(cx, fn, x, y, e) {
   cx_emit(cx, sprintf("if aw_isnan(%s) { %s }", t,
                       cx_bail(cx, sprintf("%s() of NA, unequal lengths, fewer than two values or a zero standard deviation", fn), e)))
   aw_val(t, "dbl")
+}
+
+cx_covmat <- function(cx, fn, x, y, e) {
+  shape <- function(v) if (v$kind == "m") c(v$nr, v$nc) else c(cx_len(v), "1")
+  xd <- cx_dbl_data(cx, x, e)
+  yd <- cx_dbl_data(cx, y, e)
+  sx <- shape(x)
+  sy <- shape(y)
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", t, sx[2], sy[2]))
+  cx_emit(cx, sprintf("if aw_covmat(%s, %s, %s, %s, %s, %s, %d, %s) != 0 { %s }", xd, sx[1], sx[2], yd, sy[1], sy[2],
+                      as.integer(fn == "cor"), t,
+                      cx_bail(cx, sprintf("%s() of NA, unequal rows, fewer than two rows or a zero standard deviation", fn), e)))
+  aw_val(t, "dbl", "m", sx[2], sy[2])
 }
 
 # drop(): a matrix with one row or one column becomes a vector, as R drops

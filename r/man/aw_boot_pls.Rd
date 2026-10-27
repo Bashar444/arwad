@@ -4,7 +4,7 @@
 \alias{aw_boot_pls}
 \title{Bootstrap a PLS-SEM model, compiled}
 \usage{
-aw_boot_pls(seminr_model, nboot = 500L, seed = NULL)
+aw_boot_pls(seminr_model, nboot = 500L, seed = NULL, cores = 1L)
 }
 \arguments{
 \item{seminr_model}{A model returned by \code{seminr::estimate_pls()}.}
@@ -13,6 +13,8 @@ aw_boot_pls(seminr_model, nboot = 500L, seed = NULL)
 
 \item{seed}{The seed; when \code{NULL}, one is drawn with
 \code{sample.int(100000, 1)}, as \code{bootstrap_model()} does.}
+
+\item{cores}{The number of processes to run the resamples in.}
 }
 \value{
 An object of class \code{boot_seminr_model}, laid out as
@@ -32,6 +34,13 @@ place. The caller's random-number state is left as it was. Models outside
 the native subset (Mode B, other weighting schemes, interaction terms,
 higher-order constructs, missing data) are passed to
 \code{seminr::bootstrap_model()} itself.
+}
+\details{
+With \code{cores} above 1 the resamples are split over that many worker
+processes (forked on Linux and macOS, a socket cluster on Windows). Each
+resample is computed on its own, so the result is the same for any number
+of cores; starting the workers takes time, so more cores pay off for
+thousands of resamples, not for a few hundred.
 }
 \examples{
 \dontshow{if (requireNamespace("seminr", quietly = TRUE)) withAutoprint(\{ # examplesIf}

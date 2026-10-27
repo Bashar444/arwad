@@ -96,7 +96,8 @@ Verified by black-box comparison with GNU R (300 random cases per build in [`tes
 
 - `colMeans(x)` of a double matrix: an extended-precision sum per column, divided by the number of rows before rounding.
 - `cov(x, y)` and `cor(x, y)` of two numeric vectors, giving one value: the corrected two-pass mean (Chan, Golub and LeVeque, 1983), deviations and their products summed in extended precision and divided by n − 1 before rounding; a correlation divides by two standard deviations, each rounded from an extended-precision square root, and is clamped to [−1, 1]. These are also the values R gives for the same columns of `cov(X, Y)` and `cor(X, Y)` with two matrices; `cor(X)` of a single matrix rounds differently and is not yet compiled. On 64-bit ARM, where R's own rounding depends on how its compiler vectorises these loops, the compiled code calls R's own routine (`stats:::C_cov`, `stats:::C_cor`) instead.
-- Left to GNU R: matrix arguments, `NA` or non-finite data, vectors of different lengths, fewer than two values, and zero standard deviations (R gives `NA` or warns).
+- `cov(X, Y)` and `cor(X, Y)` with a matrix argument (28 October 2026; a vector counts as one column) give the matrix of these values for every pair of columns, with each column's mean and standard deviation computed once; `cor(X, X)` computes one triangle and mirrors it, which is exact.
+- Left to GNU R: `NA` or non-finite data, unequal lengths or numbers of rows, fewer than two values, and zero standard deviations (R gives `NA` or warns).
 
 ### Phase 2 additions (28 October 2026): assigning a matrix row or column
 

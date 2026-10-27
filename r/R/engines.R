@@ -163,25 +163,24 @@ aw_pls_kernel <- function(X, blk, pre, maxIt, crit, idx) {
     # HTMT (Henseler, Ringle and Sarstedt, 2015) from the indicators: the
     # mean absolute heterotrait correlation over the geometric mean of the
     # two mean absolute monotrait correlations (1 for a single indicator).
+    Cx <- cor(Xb, Xb)
     mono <- numeric(J)
     for (j in seq_len(J)) {
       mv <- numeric(0)
-      for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == j && a < b) mv <- c(mv, abs(cor(Xb[, a], Xb[, b])))
+      for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == j && a < b) mv <- c(mv, abs(Cx[a, b]))
       mono[j] <- if (length(mv) > 0L) mean(mv) else 1
     }
     for (j in seq_len(J)) for (i in seq_len(J)) {
       H[i, j] <- NA_real_
       if (i < j) {
         hv <- numeric(0)
-        for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == i) hv <- c(hv, abs(cor(Xb[, a], Xb[, b])))
+        for (b in seq_len(p)) if (blk[b] == j) for (a in seq_len(p)) if (blk[a] == i) hv <- c(hv, abs(Cx[a, b]))
         H[i, j] <- mean(hv) / sqrt(mono[i] * mono[j])
       }
     }
     for (k in seq_len(p)) out[r, k] <- W[k, blk[k]]
-    for (j in seq_len(J)) for (k in seq_len(p)) {
-      cv <- cov(Z[, k], Y[, j])
-      out[r, p + (j - 1L) * p + k] <- if (blk[k] == j) cv else cv * 0
-    }
+    L <- cov(Z, Y)
+    for (j in seq_len(J)) for (k in seq_len(p)) out[r, p + (j - 1L) * p + k] <- if (blk[k] == j) L[k, j] else L[k, j] * 0
     for (j in seq_len(J)) for (i in seq_len(J)) {
       q <- (j - 1L) * J + i
       out[r, p + pJ + q] <- Bm[i, j]
@@ -238,6 +237,32 @@ aw_pls_run <- function(spec, idx) {
   tryCatch(aw_pls_unit()(spec$X, spec$blk, spec$pre, spec$maxIt, spec$crit, idx), error = function(e) NULL)
 }
 
+# aw_pls_run() over `cores` processes, each taking a contiguous block of the
+# resamples; the rows are bound back in order. The engine is built (or found
+# in the on-disk cache) here first, so the workers only load it.
+aw_pls_run_cores <- function(spec, idx, cores) {
+  cores <- max(1L, min(as.integer(cores), ncol(idx)))
+  if (cores == 1L || is.null(aw_pls_run(spec, idx[, 1L, drop = FALSE]))) return(aw_pls_run(spec, idx))
+  parts <- parallel::splitIndices(ncol(idx), cores)
+  if (.Platform$OS.type == "unix") {
+    out <- parallel::mclapply(parts, function(cols) aw_pls_run(spec, idx[, cols, drop = FALSE]), mc.cores = cores)
+  } else {
+    cl <- parallel::makeCluster(cores)
+    on.exit(parallel::stopCluster(cl))
+    parallel::clusterCall(cl, function(lib, cache, quiet) {
+      .libPaths(lib)
+      options(arwad.cache_dir = cache, arwad.quiet = quiet)
+      loadNamespace("arwad")
+      NULL
+    }, .libPaths(), aw_cache_dir(), getOption("arwad.quiet"))
+    out <- parallel::parLapply(cl, parts, function(cols, spec, idx) {
+      get("aw_pls_run", envir = asNamespace("arwad"))(spec, idx[, cols, drop = FALSE])
+    }, spec = spec, idx = idx)
+  }
+  if (any(vapply(out, function(o) !is.matrix(o), NA))) return(NULL)
+  do.call(rbind, out)
+}
+
 # The descriptive table seminr attaches to a bootstrap: estimate, bootstrap
 # mean and bootstrap standard deviation for each column, side by side. All
 # rows keep the estimate's row names as they are (a matrix, for weights,
@@ -268,10 +293,17 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 #' higher-order constructs, missing data) are passed to
 #' `seminr::bootstrap_model()` itself.
 #'
+#' With `cores` above 1 the resamples are split over that many worker
+#' processes (forked on Linux and macOS, a socket cluster on Windows). Each
+#' resample is computed on its own, so the result is the same for any number
+#' of cores; starting the workers takes time, so more cores pay off for
+#' thousands of resamples, not for a few hundred.
+#'
 #' @param seminr_model A model returned by `seminr::estimate_pls()`.
 #' @param nboot The number of bootstrap resamples.
 #' @param seed The seed; when `NULL`, one is drawn with
 #'   `sample.int(100000, 1)`, as `bootstrap_model()` does.
+#' @param cores The number of processes to run the resamples in.
 #' @return An object of class `boot_seminr_model`, laid out as
 #'   `bootstrap_model()` returns it, so `summary()` and seminr's other
 #'   methods work on it; `native` is `FALSE` when seminr produced it.
@@ -286,7 +318,7 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 #' model <- estimate_pls(mobi, mm, sm)
 #' boot <- aw_boot_pls(model, nboot = 200, seed = 123)
 #' summary(boot)$bootstrapped_paths
-aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL) {
+aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL, cores = 1L) {
   if (!requireNamespace("seminr", quietly = TRUE)) stop("aw_boot_pls() needs the seminr package")
   if (is.null(seed)) seed <- sample.int(100000, 1)
   boots <- nboot
@@ -306,8 +338,8 @@ aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL) {
     set.seed(seed + b)
     idx[, b] <- sample.int(n, replace = TRUE)
   }
+  res <- aw_pls_run_cores(spec, idx, cores)
   if (had) assign(".Random.seed", old, envir = globalenv()) else rm(".Random.seed", envir = globalenv())
-  res <- aw_pls_run(spec, idx)
   if (is.null(res)) return(delegate())
   aw_pls_boot_object(seminr_model, spec, res, nboot, boots, seed)
 }

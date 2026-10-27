@@ -52,8 +52,12 @@ ok <- !is.na(ref$boot_HTMT)
 htmt_rel <- max(abs(first$boot_HTMT[ok] - ref$boot_HTMT[ok]) / ref$boot_HTMT[ok])
 htmt_exact <- mean(first$boot_HTMT[ok] == ref$boot_HTMT[ok])
 
+two <- aw_boot_pls(model, nboot = B, seed = seed, cores = cores)
+same <- c(same, all_cores = all(vapply(exact, function(f) identical(two[[f]], first[[f]], num.eq = FALSE), NA)))
+
 bm <- bench::mark(
   arwad = aw_boot_pls(model, nboot = B, seed = seed),
+  arwad_all_cores = aw_boot_pls(model, nboot = B, seed = seed, cores = cores),
   seminr_all_cores = seminr_boot(NULL),
   seminr_one_core = seminr_boot(1L),
   same_algorithm_in_r = same_algorithm_in_r(model, B, seed),
@@ -64,12 +68,13 @@ res <- data.frame(contender = as.character(bm$expression), replicates = B, media
 
 # The Primer's setting: 10,000 resamples, timed once each.
 t10a <- system.time(big <- aw_boot_pls(model, nboot = 10000L, seed = seed))[["elapsed"]]
+t10c <- system.time(bigc <- aw_boot_pls(model, nboot = 10000L, seed = seed, cores = cores))[["elapsed"]]
 t10s <- system.time(bigs <- seminr_boot(NULL, 10000L))[["elapsed"]]
-same10 <- all(vapply(exact, function(f) identical(big[[f]], bigs[[f]], num.eq = FALSE), NA))
-res <- rbind(res, data.frame(contender = c("arwad", "seminr_all_cores"), replicates = 10000L,
-                             median_ms = c(t10a, t10s) * 1000, arwad_speedup = round(c(1, t10s / t10a), 2)))
+same10 <- all(vapply(exact, function(f) identical(big[[f]], bigs[[f]], num.eq = FALSE) && identical(bigc[[f]], bigs[[f]], num.eq = FALSE), NA))
+res <- rbind(res, data.frame(contender = c("arwad", "arwad_all_cores", "seminr_all_cores"), replicates = 10000L,
+                             median_ms = c(t10a, t10c, t10s) * 1000, arwad_speedup = round(c(1, t10c / t10a, t10s / t10a), 2)))
 print(res, row.names = FALSE)
-cat(sprintf(paste0("\nECSI model: 7 constructs, 24 indicators, n = 250; seminr cores = %d; first call (build) %.2f s\n",
+cat(sprintf(paste0("\nECSI model: 7 constructs, 24 indicators, n = 250; cores = %d (seminr's default and arwad_all_cores); first call (build) %.2f s\n",
                    "identical to seminr (paths, loadings, weights, total effects): %s; at 10,000 resamples: %s\n",
                    "HTMT: %.1f%% of values identical, largest relative difference %.2e\n"),
             cores, first_s, paste(names(same), same, collapse = ", "), same10, 100 * htmt_exact, htmt_rel))

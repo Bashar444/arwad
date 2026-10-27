@@ -220,6 +220,20 @@ test_that("colMeans(), cov() and cor() compile and match R bit for bit", {
     dimnames(M) <- NULL
     expect_true(identical(fm(M), colMeans(M), num.eq = FALSE), label = paste("colMeans", t))
   }
+  fcm <- aw_compile(function(X, Y) cov(X, Y))
+  frm <- aw_compile(function(X, Y) cor(X, Y))
+  frs <- aw_compile(function(X) cor(X, X))
+  for (t in seq_len(60L)) {
+    n <- sample(c(3L, 9L, 50L, 250L), 1L)
+    X <- matrix(stats::rnorm(n * 4L, 0, 10^stats::runif(1L, -2, 2)), n, 4L) + (if (t %% 3L == 0L) 1e8 else 0)
+    Y <- cbind(X[, 1L] * 0.5 + stats::rnorm(n), stats::rnorm(n), -X[, 2L])
+    expect_true(identical(fcm(X, Y), stats::cov(X, Y), num.eq = FALSE), label = paste("cov matrix", t))
+    expect_true(identical(frm(X, Y), stats::cor(X, Y), num.eq = FALSE), label = paste("cor matrix", t))
+    expect_true(identical(frs(X), stats::cor(X, X), num.eq = FALSE), label = paste("cor(X, X)", t))
+    expect_true(identical(fcm(X, Y[, 2L]), stats::cov(X, Y[, 2L]), num.eq = FALSE), label = paste("cov matrix-vector", t))
+  }
+  Z <- cbind(1, stats::rnorm(6))
+  expect_identical(suppressWarnings(frs(Z)), suppressWarnings(stats::cor(Z, Z)))
   expect_identical(fc(c(1, NA, 3), c(2, 5, 1)), stats::cov(c(1, NA, 3), c(2, 5, 1)))
   expect_identical(suppressWarnings(fr(c(1, 1, 1), c(2, 5, 1))), suppressWarnings(stats::cor(c(1, 1, 1), c(2, 5, 1))))
 })
@@ -296,6 +310,11 @@ test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() doe
   expect_identical(.Random.seed, seed_want)
   expect_identical(got$seed, want$seed)
   expect_identical(got$boot_paths, want$boot_paths)
+  set.seed(77)
+  two <- aw_boot_pls(m, nboot = 4L, cores = 2L)
+  expect_identical(.Random.seed, seed_want)
+  for (f in c("boot_paths", "boot_loadings", "boot_weights", "boot_HTMT", "boot_total_paths", "paths_descriptives"))
+    expect_true(identical(two[[f]], got[[f]], num.eq = FALSE), label = paste("two cores", f))
   sg <- summary(got)
   sw <- summary(want)
   for (f in c("bootstrapped_paths", "bootstrapped_weights", "bootstrapped_loadings", "bootstrapped_total_paths"))

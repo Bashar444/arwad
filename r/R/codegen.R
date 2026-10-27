@@ -1033,6 +1033,7 @@ aw_rt_externs <- c(
   "extern fn aw_rmean(x: const f64[:]) -> f64;",
   "extern fn aw_colmeans(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
   "extern fn aw_cov2(x: const f64[:], y: const f64[:], cor: i32) -> f64;",
+  "extern fn aw_covmat(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, cor: i32, z: f64[:]) -> i32;",
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
   "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
   "extern fn aw_pow(x: f64, y: f64) -> f64;",

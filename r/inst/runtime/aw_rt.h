@@ -78,24 +78,26 @@ static int aw_isna(double x)
  * not finite (it may only have overflowed), the sum of the terms x[i] / n
  * instead; then, when finite, a second pass adding the mean of the residuals.
  * Verified against GNU R on x86-64 and arm64, including NA and NaN data. */
-static double aw_rmean(sl_f64 x)
+static double aw_rmean_p(const double *x, int64_t n)
 {
     long double s = 0.0;
-    for (int64_t i = 0; i < x.len; i++) s += x.data[i];
+    for (int64_t i = 0; i < n; i++) s += x[i];
     if (isfinite((double) s)) {
-        s /= x.len;
+        s /= n;
     } else {
         long double t = 0.0;
-        for (int64_t i = 0; i < x.len; i++) t += x.data[i] / x.len;
+        for (int64_t i = 0; i < n; i++) t += x[i] / n;
         s = t;
     }
     if (isfinite((double) s)) {
         long double t = 0.0;
-        for (int64_t i = 0; i < x.len; i++) t += x.data[i] - s;
-        s += t / x.len;
+        for (int64_t i = 0; i < n; i++) t += x[i] - s;
+        s += t / n;
     }
     return (double) s;
 }
+
+static double aw_rmean(sl_f64 x) { return aw_rmean_p(x.data, x.len); }
 
 /* colMeans() of a double matrix: per column, an extended-precision sum
  * divided by the number of rows before rounding. Non-finite data return 1
@@ -140,6 +142,7 @@ extern aw_sexp Rf_lang3(aw_sexp a, aw_sexp b, aw_sexp c);
 extern aw_sexp Rf_lang6(aw_sexp a, aw_sexp b, aw_sexp c, aw_sexp d, aw_sexp e, aw_sexp f);
 extern void R_PreserveObject(aw_sexp s);
 extern aw_sexp Rf_allocVector(unsigned int type, ptrdiff_t length);
+extern aw_sexp Rf_allocMatrix(unsigned int type, int nrow, int ncol);
 extern aw_sexp Rf_protect(aw_sexp s);
 extern void Rf_unprotect(int n);
 extern aw_sexp Rf_ScalarInteger(int x);
@@ -173,6 +176,24 @@ static double aw_cov2_r(sl_f64 x, sl_f64 y, int32_t cor)
     Rf_unprotect(5);
     return r;
 }
+
+static void aw_covmat_r(const double *x, int64_t n, int64_t ncx, const double *y, int64_t ncy, int32_t cor, double *z)
+{
+    static aw_sexp fcov = NULL, fcor = NULL;
+    if (fcov == NULL) {
+        fcov = aw_stats_routine("C_cov");
+        fcor = aw_stats_routine("C_cor");
+    }
+    aw_sexp xs = Rf_protect(Rf_allocMatrix(14u, (int) n, (int) ncx));
+    aw_sexp ys = Rf_protect(Rf_allocMatrix(14u, (int) n, (int) ncy));
+    memcpy(REAL(xs), x, (size_t) (n * ncx) * sizeof(double));
+    memcpy(REAL(ys), y, (size_t) (n * ncy) * sizeof(double));
+    aw_sexp na = Rf_protect(Rf_ScalarInteger(4)); /* use = "everything" */
+    aw_sexp kd = Rf_protect(Rf_ScalarLogical(0));
+    aw_sexp call = Rf_protect(Rf_lang6(Rf_install(".Call"), cor ? fcor : fcov, xs, ys, na, kd));
+    memcpy(z, REAL(Rf_eval(call, R_BaseEnv)), (size_t) (ncx * ncy) * sizeof(double));
+    Rf_unprotect(5);
+}
 #endif
 
 static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
@@ -204,6 +225,77 @@ static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
     if (r > 1.0) r = 1.0;
     if (r < -1.0) r = -1.0;
     return r;
+}
+
+/* Whether some column of an n by nc matrix is constant (zero variance). */
+static int aw_const_col(const double *x, int64_t n, int64_t nc)
+{
+    for (int64_t j = 0; j < nc; j++) {
+        const double *c = x + j * n;
+        int64_t i = 1;
+        while (i < n && c[i] == c[0]) i++;
+        if (i == n) return 1;
+    }
+    return 0;
+}
+
+/* cov(X, Y) and cor(X, Y) of two matrices (a vector counts as one column),
+ * as GNU R computes them with two arguments: entry (i, j) is exactly the
+ * value of cov() or cor() of column i of X and column j of Y, the rule
+ * aw_cov2() implements, but each column's mean and standard deviation is
+ * computed once. cor(X, X) computes one triangle and mirrors it, which is
+ * exact: both entries add the same products in the same order. Returns 1
+ * where R gives NA, warns or errors (rows differ, fewer than two, non-finite
+ * data, a zero standard deviation): those calls go to R. */
+static int32_t aw_covmat(sl_f64 x, int64_t n, int64_t ncx, sl_f64 y, int64_t ny, int64_t ncy, int32_t cor, sl_f64 z)
+{
+    if (n != ny || n < 2 || ncx < 1 || ncy < 1) return 1;
+    for (int64_t i = 0; i < n * ncx; i++) if (!isfinite(x.data[i])) return 1;
+    for (int64_t i = 0; i < n * ncy; i++) if (!isfinite(y.data[i])) return 1;
+#ifdef AW_R_COV
+    if (cor && (aw_const_col(x.data, n, ncx) || aw_const_col(y.data, n, ncy))) return 1;
+    aw_covmat_r(x.data, n, ncx, y.data, ncy, cor, z.data);
+    return 0;
+#endif
+    int same = x.data == y.data && ncx == ncy;
+    double *m = malloc((size_t) (2 * (ncx + ncy)) * sizeof(double));
+    if (m == NULL) return 1;
+    double *mx = m, *my = m + ncx, *sx = m + ncx + ncy, *sy = sx + ncx;
+    for (int64_t i = 0; i < ncx; i++) mx[i] = aw_rmean_p(x.data + i * n, n);
+    for (int64_t j = 0; j < ncy; j++) my[j] = same ? mx[j] : aw_rmean_p(y.data + j * n, n);
+    if (cor) {
+        for (int64_t i = 0; i < ncx + ncy; i++) {
+            const double *c = i < ncx ? x.data + i * n : y.data + (i - ncx) * n;
+            long double mc = i < ncx ? mx[i] : my[i - ncx], ss = 0.0;
+            for (int64_t k = 0; k < n; k++) ss += (c[k] - mc) * (c[k] - mc);
+            sx[i] = (double) sqrtl(ss / (n - 1));
+            if (sx[i] == 0.0) {
+                free(m);
+                return 1;
+            }
+        }
+    }
+    for (int64_t j = 0; j < ncy; j++) {
+        const double *cy = y.data + j * n;
+        for (int64_t i = 0; i < ncx; i++) {
+            if (same && i > j) continue;
+            const double *cx = x.data + i * n;
+            long double ax = mx[i], ay = my[j], s = 0.0;
+            for (int64_t k = 0; k < n; k++) s += (cx[k] - ax) * (cy[k] - ay);
+            double c = (double) (s / (n - 1));
+            if (cor) {
+                c = c / (sx[i] * sy[j]);
+                if (c > 1.0) c = 1.0;
+                if (c < -1.0) c = -1.0;
+            }
+            z.data[i + j * ncx] = c;
+        }
+    }
+    if (same)
+        for (int64_t j = 0; j < ncy; j++)
+            for (int64_t i = j + 1; i < ncx; i++) z.data[i + j * ncx] = z.data[j + i * ncx];
+    free(m);
+    return 0;
 }
 
 /* mean() of integers or logicals: NA if any element is NA. */
