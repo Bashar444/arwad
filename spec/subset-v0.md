@@ -98,6 +98,11 @@ Verified by black-box comparison with GNU R (300 random cases per build in [`tes
 - `cov(x, y)` and `cor(x, y)` of two numeric vectors, giving one value: the corrected two-pass mean (Chan, Golub and LeVeque, 1983), deviations and their products summed in extended precision and divided by n − 1 before rounding; a correlation divides by two standard deviations, each rounded from an extended-precision square root, and is clamped to [−1, 1]. These are also the values R gives for the same columns of `cov(X, Y)` and `cor(X, Y)` with two matrices; `cor(X)` of a single matrix rounds differently and is not yet compiled. On 64-bit ARM, where R's own rounding depends on how its compiler vectorises these loops, the compiled code calls R's own routine (`stats:::C_cov`, `stats:::C_cor`) instead.
 - Left to GNU R: matrix arguments, `NA` or non-finite data, vectors of different lengths, fewer than two values, and zero standard deviations (R gives `NA` or warns).
 
+### Phase 2 additions (28 October 2026): assigning a matrix row or column
+
+- `m[, j] <- v` and `m[i, ] <- v` with one subscript: a single value fills the column or row; a vector is recycled when its length divides the column or row, as in R. Integer and logical values are stored into a double matrix as R converts them; assigning a column of `m` into `m` uses the value as it was before the assignment. Left to GNU R (which errors): an empty value, a value longer than the column or row or whose length does not divide it, and a subscript out of bounds. Not yet: `m[, ] <- v` and logical values into an integer matrix.
+- A function or a signature that is not compiled now says so once, with the reason (`options(arwad.quiet = TRUE)` turns this off); see the amendment to [ADR-0005](../docs/adr/0005-guarded-native-execution.md).
+
 ### Equivalence corpus (26 October 2026): 201 functions
 
 [`r/inst/corpus/`](../r/inst/corpus/) `slice1.R` to `slice5.R` hold 201 functions, beyond the Phase 1 target of 200: the slices above, plus statistics, estimators, numerical methods, finance and time series, linear algebra (IRLS logistic regression, Jacobi, LU), rank statistics, integer algorithms and simulation. Every one runs natively and matches GNU R bit for bit on Linux, macOS and Windows; seeded ones also match `.Random.seed`.

@@ -69,6 +69,12 @@ jobs:
           args: 'c("--no-manual", "--as-cran")'
           error-on: '"error"'
 
+      - name: Time the PLS-SEM engine on this system
+        shell: bash
+        run: |
+          R CMD INSTALL r
+          Rscript bench/phase2/pls_quick.R | tee -a "$GITHUB_STEP_SUMMARY"
+
   # Phase 1 exit criterion: no memory errors under AddressSanitizer. Every
   # compiled unit (and the Goose runtime) is built with -fsanitize=address and
   # the whole test suite, the 201-function corpus included, runs in an R

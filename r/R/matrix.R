@@ -63,19 +63,54 @@ cx_mat_read <- function(cx, a, e) {
   aw_val(t, x$type, "v")
 }
 
-# m[i, j] <- v for one value.
+# m[i, j] <- v for one value; m[, j] <- v and m[i, ] <- v for a whole column
+# or row, the value recycled as R recycles it. A value R rejects there (empty,
+# longer than the column or row, or a length that does not divide it: R
+# errors) is left to GNU R.
 cx_mat_write <- function(cx, nm, tgt, v, e) {
   var <- get0(nm, envir = cx$vars, inherits = FALSE)
   if (var$kind != "m") aw_unsupported("x[i, j] <- v on a value that is not a matrix", e)
-  if (v$kind != "s") aw_unsupported("assigning a vector into m[i, j] is planned for a later slice", e)
-  cx_scalar(v, e)
+  ei <- cx_is_empty(tgt[[3L]])
+  ej <- cx_is_empty(tgt[[4L]])
+  if (v$type %in% c("null", "exit")) aw_unsupported("a matrix assignment without a value", e)
   if (aw_rank[[v$type]] > aw_rank[[var$type]])
     aw_unsupported(sprintf("assigning a %s into '%s' would change it from %s to %s; subset v0 keeps one type per variable",
                            aw_tname[[v$type]], nm, aw_tname[[var$type]], aw_tname[[v$type]]), e)
-  cv <- cx_as(cx, v, var$type)
-  i <- cx_mat_index(cx, aw_gen(cx, tgt[[3L]]), var$nr, e)
-  j <- cx_mat_index(cx, aw_gen(cx, tgt[[4L]]), var$nc, e)
-  cx_emit(cx, sprintf("%s[(%s - 1) * %s + %s - 1] = %s;", var$g, j, var$nr, i, cv$g))
+  if (!ei && !ej) {
+    if (v$kind != "s") aw_unsupported("assigning a vector into m[i, j] is planned for a later slice", e)
+    cx_scalar(v, e)
+    cv <- cx_as(cx, v, var$type)
+    i <- cx_mat_index(cx, aw_gen(cx, tgt[[3L]]), var$nr, e)
+    j <- cx_mat_index(cx, aw_gen(cx, tgt[[4L]]), var$nc, e)
+    cx_emit(cx, sprintf("%s[(%s - 1) * %s + %s - 1] = %s;", var$g, j, var$nr, i, cv$g))
+    return(v)
+  }
+  if (v$kind == "s") {
+    src <- NULL
+    cv <- cx_as(cx, v, var$type)
+  } else {
+    if (v$type != var$type && var$type != "dbl")
+      aw_unsupported("assigning a logical vector into an integer matrix is planned for a later slice", e)
+    src <- if (v$type == var$type) v$g else cx_dbl_data(cx, v, e)
+    if (src == var$g) {
+      # m[, j] <- m: R assigns from the value as it was before the assignment.
+      src <- cx_tmp(cx)
+      cx_emit(cx, sprintf("var %s: %s[>..] = [];", src, aw_g[[var$type]]))
+      cx_emit(cx, sprintf("%s.append(%s);", src, var$g))
+    }
+  }
+  # A column (m[, j]) has nrow positions, a row (m[i, ]) ncol.
+  ext <- if (ei) var$nr else var$nc
+  at <- cx_mat_index(cx, aw_gen(cx, if (ei) tgt[[4L]] else tgt[[3L]]), if (ei) var$nc else var$nr, e)
+  k <- cx_tmp(cx)
+  pos <- if (ei) sprintf("(%s - 1) * %s + %s", at, var$nr, k) else sprintf("%s * %s + %s - 1", k, var$nr, at)
+  if (is.null(src)) {
+    cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = %s; }", k, ext, var$g, pos, cv$g))
+  } else {
+    cx_emit(cx, sprintf("if %s.len == 0 || %s.len > %s || %s %% %s.len != 0 { %s }", src, src, ext, ext, src,
+                        cx_bail(cx, "a replacement R rejects for a row or column (empty, too long, or not dividing it)", e)))
+    cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = %s[%s %% %s.len]; }", k, ext, var$g, pos, src, k, src))
+  }
   v
 }
 

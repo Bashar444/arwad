@@ -23,3 +23,7 @@ The static tier must give GNU R's answers ([ADR-0004](0004-numerical-equivalence
 - A bailout costs the native work done before it plus a full R run. Bailouts are expected to be rare (error paths, unusual data); `aw_explain()` makes frequent ones visible so they can be compiled properly.
 - Purity is a hard boundary of the static tier. Random-number generation will enter only with bit-identical generators, and re-execution after a bailout will restore `.Random.seed` first.
 - Arguments are evaluated when the compiled function is called, not lazily, and a long-running compiled loop cannot be interrupted; both are documented in `?aw_compile`.
+
+## Amendment (28 October 2026): fallbacks are announced
+
+A function outside the subset, and a signature that cannot be compiled or built, used to run in GNU R silently, with the reason only in `attr(f, "arwad_fallback")` and `aw_explain()`. That hid a real problem: the first draft of the PLS-SEM engine assigned whole matrix columns, fell back to GNU R, and its first benchmark timed interpreted R ([ADR-0006](0006-pls-sem-engine.md)). Since package version 0.0.0.9011, `aw_compile()` and the first call of such a signature print one message naming the function and the reason; `options(arwad.quiet = TRUE)` turns the messages off. Bailouts during a call, which are part of normal operation (an `NA` condition, a value R warns about), stay silent and are counted by `aw_explain()`. The construct that caused it, `m[, j] <- v`, now compiles.

@@ -21,7 +21,10 @@
 #' a zero index), the call is re-run in GNU R, so errors, warnings and results
 #' are exactly R's. Functions outside the subset are returned unchanged, with
 #' the reason in `attr(result, "arwad_fallback")`; primitives such as `sum`
-#' are returned as they are, being native code already.
+#' are returned as they are, being native code already. A function or an
+#' argument signature that runs in GNU R instead of native code says so once,
+#' in a message with the reason; `options(arwad.quiet = TRUE)` turns these
+#' messages off.
 #'
 #' Arguments are evaluated when the compiled function is called (R evaluates
 #' them lazily), and long-running compiled loops cannot be interrupted.
@@ -55,6 +58,7 @@ aw_compile <- function(f, name = NULL) {
   info <- tryCatch(aw_check(f), arwad_unsupported = function(e) e)
   if (inherits(info, "condition")) {
     attr(f, "arwad_fallback") <- conditionMessage(info)
+    aw_note_fallback(name, NULL, conditionMessage(info))
     return(f)
   }
   st <- new.env(parent = emptyenv())
@@ -109,6 +113,15 @@ aw_parse_key <- function(key) {
   })
 }
 
+# Says, once, that a function or one of its signatures runs in GNU R instead
+# of native code, and why: a silent fallback once hid that an engine was not
+# compiled at all. options(arwad.quiet = TRUE) turns these messages off.
+aw_note_fallback <- function(name, signature, reason) {
+  if (isTRUE(getOption("arwad.quiet"))) return(invisible())
+  what <- if (is.null(signature)) sprintf("'%s'", name) else sprintf("'%s' for (%s)", name, signature)
+  message(sprintf("arwad: %s runs in GNU R, not as native code: %s", what, reason))
+}
+
 aw_specialise <- function(st, key) {
   sp <- new.env(parent = emptyenv())
   sp$key <- key
@@ -118,12 +131,14 @@ aw_specialise <- function(st, key) {
   assign(key, sp, envir = st$specs)
   if (startsWith(key, "!")) {
     sp$reason <- substring(key, 2L)
+    aw_note_fallback(st$name, NULL, sp$reason)
     return(sp)
   }
   types <- if (key == "()") list() else aw_parse_key(key)
   code <- tryCatch(aw_codegen(st$info, st$f, types, st$name), arwad_unsupported = function(e) e)
   if (inherits(code, "condition")) {
     sp$reason <- conditionMessage(code)
+    aw_note_fallback(st$name, key, sp$reason)
     return(sp)
   }
   sp$signature <- code$signature
@@ -131,6 +146,10 @@ aw_specialise <- function(st, key) {
   tc <- aw_toolchain()
   if (!tc$ok) {
     sp$reason <- tc$reason
+    if (!isTRUE(aw_state$toolchain_noted)) {
+      aw_state$toolchain_noted <- TRUE
+      aw_note_fallback(st$name, NULL, paste(tc$reason, "(said once per session; every compiled function runs in GNU R)"))
+    }
     return(sp)
   }
   if (isTRUE(getOption("arwad.verbose"))) message("arwad: compiling ", st$name, " for (", code$signature, ")")
@@ -138,6 +157,7 @@ aw_specialise <- function(st, key) {
   sp$goose <- b$goose
   if (!b$ok) {
     sp$reason <- b$reason
+    aw_note_fallback(st$name, code$signature, sp$reason)
     return(sp)
   }
   sp$sym <- aw_load(b$lib, b$hash)

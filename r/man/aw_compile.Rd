@@ -29,7 +29,10 @@ model (an \code{NA} condition, integer overflow, \code{sqrt()} of a negative num
 a zero index), the call is re-run in GNU R, so errors, warnings and results
 are exactly R's. Functions outside the subset are returned unchanged, with
 the reason in \code{attr(result, "arwad_fallback")}; primitives such as \code{sum}
-are returned as they are, being native code already.
+are returned as they are, being native code already. A function or an
+argument signature that runs in GNU R instead of native code says so once,
+in a message with the reason; \code{options(arwad.quiet = TRUE)} turns these
+messages off.
 
 Arguments are evaluated when the compiled function is called (R evaluates
 them lazily), and long-running compiled loops cannot be interrupted.
