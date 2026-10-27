@@ -235,13 +235,13 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
   native <- 0L
   for (nm in names(fits)) {
     m <- fits[[nm]]
-    s <- aw_pls_spec(m)
+    s <- arwad:::aw_pls_spec(m)
     if (is.null(s)) {
       expect_true(any(m$mmMatrix[, "type"] != "A"), label = paste(nm, "is outside the native subset only for its PLSc constructs"))
       next
     }
     native <- native + 1L
-    o <- aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
+    o <- arwad:::aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
     p <- length(s$items)
     pJ <- p * length(s$cons)
     JJ <- length(s$cons)^2
@@ -268,7 +268,7 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
     nm <- names(fits)[k]
     want <- suppressMessages(seminr::bootstrap_model(fits[[nm]], nboot = 3L, cores = 1L, seed = k))
     got <- aw_boot_pls(fits[[nm]], nboot = 3L, seed = k)
-    expect_identical(got$native, !is.null(aw_pls_spec(fits[[nm]])), label = paste(nm, "native"))
+    expect_identical(got$native, !is.null(arwad:::aw_pls_spec(fits[[nm]])), label = paste(nm, "native"))
     for (f in exact) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(nm, f))
     expect_identical(is.na(got$boot_HTMT), is.na(want$boot_HTMT), label = paste(nm, "HTMT pattern"))
     ok <- !is.na(want$boot_HTMT)
@@ -277,7 +277,7 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
   }
   # The comparisons above are with native code, not with GNU R running the
   # kernel after a static fallback or a bailout.
-  u <- aw_pls_unit()
+  u <- arwad:::aw_pls_unit()
   expect_s3_class(u, "arwad_function")
   utils::capture.output(info <- aw_explain(u))
   expect_gt(sum(info$calls), 50L)
