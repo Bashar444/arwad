@@ -36,14 +36,14 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 
 Each engine is validated against its reference package on 50 datasets.
 
-| Engine | Reference |
-|---|---|
-| OLS, WLS, GLM (IRLS) | `stats::lm`, `stats::glm` |
-| PLS-SEM path algorithm with 10,000-replicate bootstrap and bias-corrected percentile intervals | `seminr` |
-| DEA (CCR and BCC; input and output orientation) | `Benchmarking` |
-| Panel fixed and random effects; Hausman test | `plm` |
-| ARIMA likelihood; GARCH(1,1) family | `stats::arima`, `rugarch` |
-| Meta-analysis: fixed effect and random effects (REML) | `metafor` |
+| Engine | Reference | Status (27 Oct 2026) |
+|---|---|---|
+| OLS, WLS, GLM (IRLS) | `stats::lm`, `stats::glm` | ◐ OLS done: `.lm.fit()` compiled through R's own LINPACK, bit-identical on 55 designs; engine `aw_boot_ols()` (bootstrap) 43.7× faster than an `lm()` loop ([bench/phase2/REPORT.md](../bench/phase2/REPORT.md)); WLS and GLM next |
+| PLS-SEM path algorithm with 10,000-replicate bootstrap and bias-corrected percentile intervals | `seminr` | planned (next after GLM) |
+| DEA (CCR and BCC; input and output orientation) | `Benchmarking` | planned |
+| Panel fixed and random effects; Hausman test | `plm` | planned |
+| ARIMA likelihood; GARCH(1,1) family | `stats::arima`, `rugarch` | planned |
+| Meta-analysis: fixed effect and random effects (REML) | `metafor` | planned |
 
 Data frames enter the static tier as column sets of known types.
 

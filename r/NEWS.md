@@ -1,3 +1,13 @@
+# arwad 0.0.0.9008
+
+* First Phase 2 engine: `aw_boot_ols()`, a compiled case-resampling
+  bootstrap of OLS coefficients, bit-identical to R running the same
+  bootstrap; 43.7x faster than an `lm()` loop and 1.9x faster than an
+  `.lm.fit()` loop on one laptop (bench/phase2/REPORT.md).
+* `.lm.fit(x, y)$coefficients` and `$residuals` compile, through R's own
+  LINPACK `dqrls`; validated bit for bit on 55 designs.
+* `stats` added to Imports.
+
 # arwad 0.0.0.9007
 
 * Corpus grown to 201 functions (Phase 1 target: 200): `slice4.R` and

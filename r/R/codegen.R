@@ -873,6 +873,11 @@ aw_gen <- function(cx, e, want = TRUE) {
     "is.na" = cx_unary(cx, nm, aw_gen(cx, a[[1L]]), e),
     "runif" = , "rnorm" = cx_random(cx, nm, a, e),
     "sample" = , "sample.int" = cx_sample(cx, nm, a, e),
+    "$" = {
+      m <- aw_match_args(as.list(a[[1L]])[-1L], c("x", "y"))
+      cx_lmfit(cx, aw_gen(cx, m$x), aw_gen(cx, m$y), as.character(a[[2L]]), e)
+    },
+    ".lm.fit" = aw_unsupported(".lm.fit() returns a list; use .lm.fit(x, y)$coefficients or $residuals", e),
     "c" = cx_c(cx, lapply(a, function(z) aw_gen(cx, z)), e),
     "mean" = cx_mean(cx, aw_gen(cx, a[[1L]]), e),
     "min" = , "max" = cx_extreme(cx, nm, lapply(a, function(z) aw_gen(cx, z)), e),
@@ -938,6 +943,7 @@ aw_rt_externs <- c(
   "extern fn aw_crossprod1(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
   "extern fn aw_crossprod2(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, z: f64[:]) -> i32;",
   "extern fn aw_solve(a: const f64[:], n: i64, b: f64[:], p: i64) -> i32;",
+  "extern fn aw_lmfit(x: const f64[:], n: i64, p: i64, y: const f64[:], coef: f64[:], resid: f64[:]) -> i32;",
   "extern fn aw_ret_dblm(x: const f64[:], nr: i64, nc: i64);",
   "extern fn aw_ret_intm(x: const i32[:], nr: i64, nc: i64);",
   "extern fn aw_ret_lglm(x: const i32[:], nr: i64, nc: i64);",

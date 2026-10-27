@@ -1,0 +1,5 @@
+"contender","median_ms","arwad_speedup"
+"arwad",60.5,1
+"same_algorithm_in_r",449.9,7.44
+"lm_fit_loop",115.5,1.91
+"lm_formula_loop",2645,43.71

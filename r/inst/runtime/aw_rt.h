@@ -257,6 +257,40 @@ static int32_t aw_solve(sl_f64 a, int64_t n, sl_f64 b, int64_t p)
     return bad;
 }
 
+/* .lm.fit(x, y): R's own LINPACK least squares (dqrls, Householder QR with
+ * limited pivoting) with .lm.fit's default tolerance 1e-7, as lm() uses it.
+ * Fills coef (p) and resid (n). Returns 1, leaving the call to GNU R, for
+ * non-finite data (R errors) or a rank-deficient design (R pivots and
+ * reorders). */
+#include <R_ext/Applic.h>
+
+static int32_t aw_lmfit(sl_f64 x, int64_t n, int64_t p, sl_f64 y, sl_f64 coef, sl_f64 resid)
+{
+    if (n <= 0 || p <= 0) return 1;
+    for (int64_t i = 0; i < x.len; i++) if (!isfinite(x.data[i])) return 1;
+    for (int64_t i = 0; i < y.len; i++) if (!isfinite(y.data[i])) return 1;
+    int nn = (int) n, pp = (int) p, ny = 1, rank = 0;
+    double tol = 1e-7;
+    double *qr = malloc((size_t) (n * p) * sizeof(double));
+    double *yy = malloc((size_t) n * sizeof(double));
+    double *eff = malloc((size_t) n * sizeof(double));
+    double *qraux = malloc((size_t) p * sizeof(double));
+    double *work = malloc((size_t) (2 * p) * sizeof(double));
+    int *pivot = malloc((size_t) p * sizeof(int));
+    int32_t bad = (qr == NULL || yy == NULL || eff == NULL || qraux == NULL || work == NULL || pivot == NULL);
+    if (!bad) {
+        memcpy(qr, x.data, (size_t) (n * p) * sizeof(double));
+        memcpy(yy, y.data, (size_t) n * sizeof(double));
+        memcpy(resid.data, y.data, (size_t) n * sizeof(double));
+        memcpy(eff, y.data, (size_t) n * sizeof(double));
+        for (int i = 0; i < pp; i++) pivot[i] = i + 1;
+        F77_CALL(dqrls)(qr, &nn, &pp, yy, &ny, &tol, coef.data, resid.data, eff, &rank, pivot, qraux, work);
+        if (rank < pp) bad = 1;
+    }
+    free(qr); free(yy); free(eff); free(qraux); free(work); free(pivot);
+    return bad;
+}
+
 /* Called by the shim after the entry returns: hands over the result buffer. */
 int aw_res_take(void **buf, int64_t *len, int64_t *nr, int64_t *nc)
 {
