@@ -8,6 +8,12 @@ read_speedup <- function(file, contender, replicates = NULL) {
   if (!is.null(replicates)) d <- d[d$replicates == replicates, ]
   d$arwad_speedup[d$contender == contender]
 }
+# Ratio of two contenders' times in one benchmark file.
+ratio <- function(file, slow, fast, replicates) {
+  d <- utils::read.csv(file.path("bench", "phase2", file))
+  d <- d[d$replicates == replicates, ]
+  d$median_ms[d$contender == slow] / d$median_ms[d$contender == fast]
+}
 rows <- list(
   list(group = "Regression bootstrap (OLS), 2,000 resamples", note = "vs the lm() loop most researchers write",
        x = read_speedup("ols_boot_timing.csv", "lm_formula_loop"), today = TRUE),
@@ -17,9 +23,11 @@ rows <- list(
        x = read_speedup("glm_boot_timing.csv", "glm_formula_loop"), today = TRUE),
   list(group = NULL, note = "vs the same algorithm in plain R: compilation alone",
        x = read_speedup("glm_boot_timing.csv", "same_algorithm_in_r"), today = FALSE),
-  list(group = "PLS-SEM bootstrap, ECSI model", note = "10,000 resamples, vs seminr::bootstrap_model() on 4 cores",
-       x = read_speedup("pls_boot_timing.csv", "seminr_all_cores", 10000L), today = TRUE),
-  list(group = NULL, note = "1,000 resamples, vs the same algorithm in plain R",
+  list(group = "PLS-SEM bootstrap, ECSI model, 10,000 resamples", note = "both on 4 cores, vs seminr::bootstrap_model() (its fastest of three runs)",
+       x = ratio("pls_boot_timing.csv", "seminr_all_cores_fastest", "arwad_all_cores", 10000L), today = TRUE),
+  list(group = NULL, note = "Arwad on 1 core, vs seminr::bootstrap_model() on 4 cores (its fastest run)",
+       x = ratio("pls_boot_timing.csv", "seminr_all_cores_fastest", "arwad", 10000L), today = TRUE),
+  list(group = NULL, note = "1,000 resamples on 1 core, vs the same algorithm in plain R",
        x = read_speedup("pls_boot_timing.csv", "same_algorithm_in_r", 1000L), today = FALSE))
 
 themes <- list(
@@ -66,8 +74,8 @@ card <- function(th) {
     sprintf('<rect x="0.5" y="0.5" width="%d" height="%d" rx="14" fill="%s" stroke="%s"/>', W - 1, H - 1, th[["bg"]], th[["border"]]),
     sprintf('<text x="%d" y="48" font-family="%s" font-size="14" font-weight="700" letter-spacing="2" fill="%s">ARWAD · R, COMPILED · PHASE 2 RESULTS</text>', x0, mono, th[["gold"]]),
     sprintf('<text x="%d" y="86" font-family="%s" font-size="28" font-weight="700" fill="%s">The same answers as R, bit for bit, from native code</text>', x0, sans, th[["ink"]]),
-    sprintf('<text x="%d" y="116" font-family="%s" font-size="15" fill="%s">Times faster on one laptop core (Intel i7-7600U), same seed for every contender. Green: against the code researchers use today.</text>', x0, sans, th[["muted"]]),
-    sprintf('<text x="%d" y="138" font-family="%s" font-size="15" fill="%s">Blue: against the same algorithm run by GNU R, which is what compilation alone adds.</text>', x0, sans, th[["muted"]]))
+    sprintf('<text x="%d" y="116" font-family="%s" font-size="15" fill="%s">Times faster on one laptop (Intel i7-7600U), same seed for every contender, identical results.</text>', x0, sans, th[["muted"]]),
+    sprintf('<text x="%d" y="138" font-family="%s" font-size="15" fill="%s">Green: against the code researchers use today. Blue: against the same algorithm in GNU R.</text>', x0, sans, th[["muted"]]))
   foot <- c(
     sprintf('<rect x="%d" y="%d" width="%d" height="64" rx="8" fill="%s"/>', x0, y, W - 2 * x0, th[["band"]]),
     sprintf('<rect x="%d" y="%d" width="5" height="64" rx="2" fill="%s"/>', x0, y, th[["gold"]]),

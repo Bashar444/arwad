@@ -8,7 +8,7 @@
 
 `arwad::aw_glm_fit()` and `arwad::aw_boot_glm()` do the same for generalised linear models: iteratively reweighted least squares for binomial (logit), Poisson (log) and Gaussian (identity) models. For 1,000 replicates of a logistic regression on a 200 by 5 design, `aw_boot_glm()` took **382.4 ms**: **10.8 times faster** than a `glm()` loop and **3.25 times faster** than a `glm.fit()` loop, with **identical coefficients** to both.
 
-`arwad::aw_boot_pls()` is a compiled replacement for `seminr::bootstrap_model()`, the reference implementation of the PLS-SEM bootstrap in R. It re-estimates a model on case resamples with the PLS path algorithm (Mode A composites, path weighting scheme) and returns the same `boot_seminr_model` object, so `summary()` works on it unchanged. Path coefficients, total effects, loadings and weights are **bit-identical** to seminr's; HTMT ratios agree to within two units in the last place. For 1,000 resamples of the seven-construct ECSI model it took **4.58 s** on one core: **6.8 times faster** than seminr running on all four logical cores of the laptop and **9.6 times faster** than seminr on one core. For **10,000 resamples**, the number the Primer recommends, it took **41.3 s** against **211.9 s** (**5.1 times faster**).
+`arwad::aw_boot_pls()` is a compiled replacement for `seminr::bootstrap_model()`, the reference implementation of the PLS-SEM bootstrap in R. It re-estimates a model on case resamples with the PLS path algorithm (Mode A composites, path weighting scheme) and returns the same `boot_seminr_model` object, so `summary()` works on it unchanged. Path coefficients, total effects, loadings and weights are **bit-identical** to seminr's; HTMT ratios agree to within two units in the last place. For **10,000 resamples** of the seven-construct ECSI model, the number the Primer recommends, it took **15.3 s on four cores** against **239.9 s** for seminr on the same four cores (seminr's fastest of three runs): **15.7 times faster**; on a single core it took **32.8 s** (**7.3 times faster** than seminr on four). For 1,000 resamples on one core it took **3.48 s**: 6.8 times faster than seminr on four cores and 12.8 times faster than seminr on one core.
 
 ## 1. OLS bootstrap: what was measured
 
@@ -38,20 +38,31 @@ Equivalence: the engine's 1,000 by 5 coefficient matrix is identical to all thre
 
 ## 3. PLS-SEM bootstrap: what was measured
 
-Design: the European Customer Satisfaction Index model (Tenenhaus et al., 2005) on seminr's `mobi` data: 7 constructs, 24 indicators, 12 paths, n = 250; path weighting scheme, Mode A composites, seminr's defaults (`maxIt` = 300, stop criterion 1e-7); seed 123. Times are medians of `bench::mark()` (3 runs); the 10,000-resample rows are single runs. seminr distributes resamples over a cluster of R processes, one per logical core by default (4 on this laptop); the engine runs in one process on one core.
+Design: the European Customer Satisfaction Index model (Tenenhaus et al., 2005) on seminr's `mobi` data: 7 constructs, 24 indicators, 12 paths, n = 250; path weighting scheme, Mode A composites, seminr's defaults (`maxIt` = 300, stop criterion 1e-7); seed 123. seminr distributes resamples over a cluster of R processes, one per logical core by default (4 on this laptop: 2 cores, 4 threads); `aw_boot_pls()` runs in one process unless given `cores`. The 1,000-resample times are medians of `bench::mark()` (3 runs), the 10,000-resample times come from three rounds (below).
 
-| Contender | Resamples | Median (ms) | `aw_boot_pls()` is |
+| Contender | Resamples | Time | `aw_boot_pls()` on 1 core is |
 |---|---|---|---|
-| `aw_boot_pls()` | 1,000 | 4,584 | — |
-| `bootstrap_model()`, all cores | 1,000 | 30,990 | 6.76× faster |
-| `bootstrap_model(cores = 1)` | 1,000 | 43,890 | 9.57× faster |
-| same algorithm in R | 1,000 | 49,080 | 10.71× faster |
-| `aw_boot_pls()` | 10,000 | 41,250 | — |
-| `bootstrap_model()`, all cores | 10,000 | 211,910 | 5.14× faster |
+| `aw_boot_pls()` | 1,000 | 3,483 ms | — |
+| `aw_boot_pls(cores = 4)` | 1,000 | 2,973 ms | 0.85 of its time |
+| `bootstrap_model()`, all cores | 1,000 | 23,570 ms | 6.77× faster |
+| `bootstrap_model(cores = 1)` | 1,000 | 44,570 ms | 12.80× faster |
+| same algorithm in R | 1,000 | 41,240 ms | 11.84× faster |
 
-Equivalence: the arrays of path coefficients, total effects, loadings and weights are identical (`identical(..., num.eq = FALSE)`) to seminr's with all cores and with one core, at 1,000 and at 10,000 resamples. Of the HTMT values, 75.1% are identical and the largest relative difference is 4.4e-16. The first call, in a fresh cache, took 22.7 s (one-off setup, building the engine, and the 1,000 resamples).
+Ten thousand resamples, three rounds of the same comparison on the same laptop (identical results in every round):
 
-Variation: an earlier run of the same script, with the engine not yet compiling (see §6), timed seminr at 23,340 ms on all cores, 46,540 ms on one core and 220,560 ms for 10,000 resamples; against those, the engine is 5.1, 10.2 and 5.3 times faster. Read the speed-up as about 5 to 10 times, not as a precise ratio.
+| Round | `bootstrap_model()`, 4 cores | `aw_boot_pls()`, 1 core | `aw_boot_pls(cores = 4)` |
+|---|---|---|---|
+| 1 | 450.5 s | 32.8 s | 22.2 s |
+| 2 | 654.7 s | 38.5 s | 15.3 s |
+| 3 | 239.9 s | 31.5 s | 14.8 s |
+| median | 450.5 s | 32.8 s | 15.3 s |
+
+seminr's time varies widely on this laptop (212 to 655 s over five runs on 27 and 28 October), Arwad's much less. The headline ratios are therefore conservative: seminr's **fastest** run against Arwad's **median**: on the same four cores 239.9 / 15.3 = **15.7 times faster**, from a single core 239.9 / 32.8 = **7.3 times faster**. Against seminr's median the ratios would be 29.4 and 13.7.
+
+Equivalence: the arrays of path coefficients, total effects, loadings and weights are identical (`identical(..., num.eq = FALSE)`) to seminr's with all cores and with one core, at 1,000 and at 10,000 resamples, and for any number of Arwad workers. Of the HTMT values, 75.1% are identical and the largest relative difference is 4.4e-16. The first call, in a fresh cache, took 17.2 s (one-off setup, building the engine, and the 1,000 resamples).
+
+History: the first compiled version (27 October) took 4,584 ms for 1,000 resamples and 41.3 s for 10,000 on one core. Profiling showed half of each resample in correlations computed pair by pair (HTMT) and in cross-loadings, each recomputing column means; computing them as one covariance matrix and one correlation matrix (compiled `cov(X, Y)` and `cor(X, Y)`) cut the engine's time per resample from 5.15 to 2.85 ms, with identical results. Parallel workers add little at 1,000 resamples (starting them costs about as much as they save) and halve the time at 10,000 on this two-core laptop.
+
 
 Other systems: since 28 October every CI run times 100 resamples of the same model on each system ([`pls_quick.R`](pls_quick.R), posted to the run's summary). First results, on GitHub's runners:
 
@@ -79,7 +90,7 @@ Every run was native (no fallback to GNU R) and identical to seminr. Two caution
 1. **Against the code researchers actually write, the gain is large.** Most of the time of the `lm()` and `glm()` loops is spent building model frames and formula machinery for every replicate; the engines do only the arithmetic.
 2. **Against the best hand-tuned R, the gain is modest but real:** 1.9 times for OLS and 3.25 times for GLM. Those loops already spend much of their time in the same Fortran QR; the engines save R's per-iteration allocation and copying.
 3. **Same answers, by construction.** The engines call R's own random-number stream and R's own QR, and the GLM algorithm was matched to `glm.fit()` by black-box tests, so there is no "Arwad answer" to explain to a reviewer: it is R's answer, sooner.
-4. **The PLS-SEM engine wins twice:** on arithmetic (one core of compiled code against seminr's R) and on overhead (seminr runs the whole estimation function for every resample and starts a cluster of R processes for every bootstrap). It does so on one core, so a parallel version is the obvious next gain.
+4. **The PLS-SEM engine wins twice:** on arithmetic (one core of compiled code against seminr's R) and on overhead (seminr runs the whole estimation function for every resample and starts a cluster of R processes for every bootstrap). It does so on one core; with `cores = 4` it halves the time again for 10,000 resamples on this two-core laptop.
 5. **The GLM engine has room to grow.** About 0.38 ms per logistic fit is well above what the arithmetic needs; profiling the kernel (allocation per iteration, repeated `exp()` calls) is the next optimisation.
 
 ## 6. Found on the way
@@ -92,4 +103,4 @@ A mistake caught by the benchmark: the first version of the PLS-SEM kernel assig
 
 ## 7. Environment and next steps
 
-Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0, Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): Mode B, consistent PLS and interaction terms in the native PLS-SEM path, bias-corrected percentile intervals, and a parallel bootstrap; then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).
+Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0, Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): Mode B, consistent PLS and interaction terms in the native PLS-SEM path, bias-corrected percentile intervals, and fewer passes over the data in the PLS iterations; then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).

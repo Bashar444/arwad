@@ -19,26 +19,26 @@
 
 <p align="center">
   <a href="bench/phase2/REPORT.md"><img alt="Results: bit-identical to R and seminr" src="https://img.shields.io/badge/Results-bit--identical%20to%20R%20and%20seminr-A16207?style=for-the-badge"></a>
-  <a href="bench/phase2/REPORT.md"><img alt="PLS-SEM bootstrap: 5.1 times faster than seminr" src="https://img.shields.io/badge/PLS--SEM%20bootstrap-5.1%C3%97%20faster%20than%20seminr-15803D?style=for-the-badge"></a>
+  <a href="bench/phase2/REPORT.md"><img alt="PLS-SEM bootstrap: 15.7 times faster than seminr on the same 4 cores" src="https://img.shields.io/badge/PLS--SEM%20bootstrap-15.7%C3%97%20faster%20than%20seminr-15803D?style=for-the-badge"></a>
   <a href="bench/phase2/REPORT.md"><img alt="Regression bootstrap: 43.7 times faster than an lm() loop" src="https://img.shields.io/badge/Regression%20bootstrap-43.7%C3%97%20faster%20than%20lm%28%29%20loops-15803D?style=for-the-badge"></a>
   <a href="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml"><img alt="Tested on Linux, macOS and Windows" src="https://img.shields.io/badge/Tested%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-1E3A5F?style=for-the-badge"></a>
 </p>
 
 > [!TIP]
-> **What this changes for R and statistics.** Researchers keep writing R, and reviewers get exactly the numbers R gives: bit for bit, checked on three operating systems in every test run. The difference is time. On one laptop, a PLS-SEM bootstrap with the 10,000 resamples the Primer recommends took 41 s instead of 212 s with `seminr` on four cores, and a regression bootstrap ran 43.7 times faster than the usual `lm()` loop. Compilation alone makes the same algorithm 7 to 12 times faster than plain R.
+> **What this changes for R and statistics.** Researchers keep writing R, and reviewers get exactly the numbers R gives: bit for bit, checked on three operating systems in every test run. The difference is time. On one laptop, a PLS-SEM bootstrap with the 10,000 resamples the Primer recommends took 15 s instead of 240 s with `seminr` on the same four cores (seminr's fastest of three runs; Arwad needs 33 s on a single core), and a regression bootstrap ran 43.7 times faster than the usual `lm()` loop. Compilation alone makes the same algorithm 7 to 12 times faster than plain R.
 
 <p align="center">
   <a href="bench/phase2/REPORT.md">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/assets/results-dark.svg">
       <source media="(prefers-color-scheme: light)" srcset="docs/assets/results-light.svg">
-      <img alt="Phase 2 results: 43.7 times faster than an lm() loop, 10.8 times faster than a glm() loop, 5.1 times faster than seminr for 10,000 PLS-SEM resamples, and 7 to 12 times faster than the same algorithm in plain R; all bit-identical to GNU R and seminr." src="docs/assets/results-light.svg" width="100%">
+      <img alt="Phase 2 results: 43.7 times faster than an lm() loop, 10.8 times faster than a glm() loop, 15.7 times faster than seminr on the same four cores for 10,000 PLS-SEM resamples, and 7 to 12 times faster than the same algorithm in plain R; all bit-identical to GNU R and seminr." src="docs/assets/results-light.svg" width="100%">
     </picture>
   </a>
 </p>
 
 > [!NOTE]
-> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 under way: engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop, `aw_boot_glm()` a logistic regression 10.8× faster than a `glm()` loop, and `aw_boot_pls()` a PLS-SEM model 5–10× faster than `seminr::bootstrap_model()` (10,000 resamples: 41 s instead of 212 s), all with bit-identical results ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
+> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 under way: engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop, `aw_boot_glm()` a logistic regression 10.8× faster than a `glm()` loop, and `aw_boot_pls()` a PLS-SEM model 15.7× faster than `seminr::bootstrap_model()` on the same four cores (10,000 resamples: 15 s instead of 240 s), all with bit-identical results ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
 >
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 

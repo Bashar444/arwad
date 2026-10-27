@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="684" viewBox="0 0 960 684" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="734" viewBox="0 0 960 734" role="img" aria-labelledby="t d">
 <title id="t">Arwad, Phase 2 results</title>
-<desc id="d">Times faster than R: 43.7× vs the lm() loop most researchers write; 7.4× vs the same algorithm in plain R: compilation alone; 10.8× vs the glm() loop most researchers write; 12.3× vs the same algorithm in plain R: compilation alone; 5.1× 10,000 resamples, vs seminr::bootstrap_model() on 4 cores; 10.7× 1,000 resamples, vs the same algorithm in plain R. Results bit-identical to R and seminr.</desc>
-<rect x="0.5" y="0.5" width="959" height="683" rx="14" fill="#0F172A" stroke="#334155"/>
+<desc id="d">Times faster than R: 43.7× vs the lm() loop most researchers write; 7.4× vs the same algorithm in plain R: compilation alone; 10.8× vs the glm() loop most researchers write; 12.3× vs the same algorithm in plain R: compilation alone; 15.7× both on 4 cores, vs seminr::bootstrap_model() (its fastest of three runs); 7.3× Arwad on 1 core, vs seminr::bootstrap_model() on 4 cores (its fastest run); 11.8× 1,000 resamples on 1 core, vs the same algorithm in plain R. Results bit-identical to R and seminr.</desc>
+<rect x="0.5" y="0.5" width="959" height="733" rx="14" fill="#0F172A" stroke="#334155"/>
 <text x="40" y="48" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#E3B341">ARWAD · R, COMPILED · PHASE 2 RESULTS</text>
 <text x="40" y="86" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#F1F5F9">The same answers as R, bit for bit, from native code</text>
-<text x="40" y="116" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#94A3B8">Times faster on one laptop core (Intel i7-7600U), same seed for every contender. Green: against the code researchers use today.</text>
-<text x="40" y="138" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#94A3B8">Blue: against the same algorithm run by GNU R, which is what compilation alone adds.</text>
+<text x="40" y="116" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#94A3B8">Times faster on one laptop (Intel i7-7600U), same seed for every contender, identical results.</text>
+<text x="40" y="138" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#94A3B8">Green: against the code researchers use today. Blue: against the same algorithm in GNU R.</text>
 <text x="40" y="180" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#F1F5F9">Regression bootstrap (OLS), 2,000 resamples</text>
 <text x="40" y="202" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">vs the lm() loop most researchers write</text>
 <rect x="40" y="210" width="760" height="20" rx="4" fill="#22C55E"/>
@@ -20,15 +20,18 @@
 <text x="40" y="388" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">vs the same algorithm in plain R: compilation alone</text>
 <rect x="40" y="396" width="214" height="20" rx="4" fill="#9DB9DC"/>
 <text x="264" y="412" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#9DB9DC">12.3×</text>
-<text x="40" y="452" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#F1F5F9">PLS-SEM bootstrap, ECSI model</text>
-<text x="40" y="474" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">10,000 resamples, vs seminr::bootstrap_model() on 4 cores</text>
-<rect x="40" y="482" width="89" height="20" rx="4" fill="#22C55E"/>
-<text x="139" y="498" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#22C55E">5.1×</text>
-<text x="40" y="524" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">1,000 resamples, vs the same algorithm in plain R</text>
-<rect x="40" y="532" width="186" height="20" rx="4" fill="#9DB9DC"/>
-<text x="236" y="548" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#9DB9DC">10.7×</text>
-<rect x="40" y="572" width="880" height="64" rx="8" fill="#1C1A12"/>
-<rect x="40" y="572" width="5" height="64" rx="2" fill="#E3B341"/>
-<text x="60" y="598" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#F1F5F9">Bit-identical to GNU R and seminr, checked on Linux, macOS and Windows in every CI run</text>
-<text x="60" y="620" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 53 PLS-SEM models · bench/phase2/REPORT.md</text>
+<text x="40" y="452" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="#F1F5F9">PLS-SEM bootstrap, ECSI model, 10,000 resamples</text>
+<text x="40" y="474" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">both on 4 cores, vs seminr::bootstrap_model() (its fastest of three runs)</text>
+<rect x="40" y="482" width="273" height="20" rx="4" fill="#22C55E"/>
+<text x="323" y="498" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#22C55E">15.7×</text>
+<text x="40" y="524" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">Arwad on 1 core, vs seminr::bootstrap_model() on 4 cores (its fastest run)</text>
+<rect x="40" y="532" width="127" height="20" rx="4" fill="#22C55E"/>
+<text x="177" y="548" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#22C55E">7.3×</text>
+<text x="40" y="574" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">1,000 resamples on 1 core, vs the same algorithm in plain R</text>
+<rect x="40" y="582" width="206" height="20" rx="4" fill="#9DB9DC"/>
+<text x="256" y="598" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#9DB9DC">11.8×</text>
+<rect x="40" y="622" width="880" height="64" rx="8" fill="#1C1A12"/>
+<rect x="40" y="622" width="5" height="64" rx="2" fill="#E3B341"/>
+<text x="60" y="648" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#F1F5F9">Bit-identical to GNU R and seminr, checked on Linux, macOS and Windows in every CI run</text>
+<text x="60" y="670" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#94A3B8">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 53 PLS-SEM models · bench/phase2/REPORT.md</text>
 </svg>

@@ -1,7 +1,10 @@
 "contender","replicates","median_ms","arwad_speedup"
-"arwad",1000,4584,1
-"seminr_all_cores",1000,30990,6.76
-"seminr_one_core",1000,43890,9.57
-"same_algorithm_in_r",1000,49080,10.71
-"arwad",10000,41250,1
-"seminr_all_cores",10000,211910,5.14
+"arwad",1000,3483,1
+"arwad_all_cores",1000,2973,0.85
+"seminr_all_cores",1000,23570,6.77
+"seminr_one_core",1000,44570,12.8
+"same_algorithm_in_r",1000,41240,11.84
+"arwad",10000,32840,1
+"arwad_all_cores",10000,15300,0.47
+"seminr_all_cores",10000,450530,13.72
+"seminr_all_cores_fastest",10000,239900,7.31
