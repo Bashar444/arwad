@@ -53,6 +53,16 @@ Equivalence: the arrays of path coefficients, total effects, loadings and weight
 
 Variation: an earlier run of the same script, with the engine not yet compiling (see §6), timed seminr at 23,340 ms on all cores, 46,540 ms on one core and 220,560 ms for 10,000 resamples; against those, the engine is 5.1, 10.2 and 5.3 times faster. Read the speed-up as about 5 to 10 times, not as a precise ratio.
 
+Other systems: since 28 October every CI run times 100 resamples of the same model on each system ([`pls_quick.R`](pls_quick.R), posted to the run's summary). First results, on GitHub's runners:
+
+| System | `aw_boot_pls()` | `bootstrap_model(cores = 1)` | Same algorithm in R |
+|---|---|---|---|
+| Linux x86-64 | 0.36 s | 1.39 s (3.9× slower) | 3.19 s (8.9× slower) |
+| macOS arm64 | 0.38 s | 1.14 s (3.0× slower) | 2.98 s (7.9× slower) |
+| Windows x86-64 | 0.28 s | 1.25 s (4.5× slower) | 2.39 s (8.5× slower) |
+
+Every run was native (no fallback to GNU R) and identical to seminr. Two cautions: these machines run seminr several times faster than the laptop of the table above, so against seminr the gain there is 3 to 4.5 times, not 10; and 100 resamples is a short run, in which fixed costs weigh more than at 1,000 or 10,000. Against the same algorithm in R, which measures what compilation itself adds, the gain is 8 to 9 times on every system.
+
 ## 4. Validation (Phase 2 rule: at least 50 datasets)
 
 [`r/tests/testthat/test-engines.R`](../../r/tests/testthat/test-engines.R), run in CI on Linux, macOS and Windows. The designs are 30 numeric data frames of R's `datasets` package (response = first numeric column, design = intercept plus the other numeric columns) and 25 seeded synthetic designs (n from 15 to 1,000, k from 2 to 6, predictor scales from 0.1 to 100).
