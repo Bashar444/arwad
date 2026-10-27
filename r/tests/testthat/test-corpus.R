@@ -30,15 +30,18 @@ test_that("calls switch between native units by argument type", {
 test_that("both build paths work: direct, and R CMD SHLIB as the fallback", {
   skip_if_no_toolchain()
   f <- function(x) { s <- 0; for (v in x) s <- s + v * v; s }
-  method <- function(g) get("dbl[]", envir = attr(g, "arwad_state")$specs)$method
+  spec <- function(g) get("dbl[]", envir = attr(g, "arwad_state")$specs)
+  # Fresh caches, so that both units are built here rather than found in the
+  # cache that CI keeps between runs.
+  old <- options(arwad.build = NULL, arwad.cache_dir = tempfile("arwad-direct"))
+  on.exit(options(old))
   g <- aw_compile(f)
   expect_identical(g(c(1.5, -2)), f(c(1.5, -2)))
-  expect_identical(method(g), "direct")
-  old <- options(arwad.build = "shlib", arwad.cache_dir = tempfile("arwad-shlib"))
-  on.exit(options(old))
+  expect_identical(spec(g)$method, "direct", label = paste("direct build:", spec(g)$reason))
+  options(arwad.build = "shlib", arwad.cache_dir = tempfile("arwad-shlib"))
   h <- aw_compile(f)
   expect_identical(h(c(1.5, -2)), f(c(1.5, -2)))
-  expect_identical(method(h), "R CMD SHLIB")
+  expect_identical(spec(h)$method, "R CMD SHLIB", label = paste("R CMD SHLIB build:", spec(h)$reason))
 })
 
 test_that("a compiled function does not change its caller's vector", {
