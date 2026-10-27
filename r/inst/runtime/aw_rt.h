@@ -122,6 +122,16 @@ static int32_t aw_colmeans(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
  * and is clamped to [-1, 1]. Verified by black-box comparison with GNU R.
  * Returns NaN where R gives NA, warns or errors (lengths differ, n < 2,
  * non-finite data, a zero standard deviation): those calls go to R. */
+/* A sum of products as GNU R's C code accumulates it: on 64-bit ARM, where
+ * long double is double, R is compiled with floating-point contraction, so
+ * each product is added with a fused multiply-add; elsewhere the product and
+ * the sum are rounded separately (in extended precision on x86-64). */
+#if (defined(__aarch64__) || defined(__arm64__)) && LDBL_MANT_DIG == DBL_MANT_DIG
+#define AW_ACC(s, a, b) ((s) = fma((a), (b), (s)))
+#else
+#define AW_ACC(s, a, b) ((s) += (a) * (b))
+#endif
+
 static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
 {
     int64_t n = x.len;
@@ -129,12 +139,12 @@ static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
     for (int64_t i = 0; i < n; i++)
         if (!isfinite(x.data[i]) || !isfinite(y.data[i])) return NAN;
     long double mx = aw_rmean(x), my = aw_rmean(y), sxy = 0.0;
-    for (int64_t i = 0; i < n; i++) sxy += (x.data[i] - mx) * (y.data[i] - my);
+    for (int64_t i = 0; i < n; i++) AW_ACC(sxy, x.data[i] - mx, y.data[i] - my);
     double c = (double) (sxy / (n - 1));
     if (!cor) return c;
     long double sxx = 0.0, syy = 0.0;
-    for (int64_t i = 0; i < n; i++) sxx += (x.data[i] - mx) * (x.data[i] - mx);
-    for (int64_t i = 0; i < n; i++) syy += (y.data[i] - my) * (y.data[i] - my);
+    for (int64_t i = 0; i < n; i++) AW_ACC(sxx, x.data[i] - mx, x.data[i] - mx);
+    for (int64_t i = 0; i < n; i++) AW_ACC(syy, y.data[i] - my, y.data[i] - my);
     double sx = (double) sqrtl(sxx / (n - 1)), sy = (double) sqrtl(syy / (n - 1));
     if (sx == 0.0 || sy == 0.0) return NAN;
     double r = c / (sx * sy);
