@@ -30,3 +30,7 @@ The third Phase 2 engine is the PLS-SEM path algorithm with its bootstrap, the m
 - `aw_boot_pls(model, nboot, seed)` is a drop-in replacement for `seminr::bootstrap_model()` that returns a `boot_seminr_model` object, so `summary()` and `seminr`'s plots work on it.
 - `seminr` becomes a suggested package; the tests compare against it on 54 models (8 on `seminr`'s own datasets, 46 seeded synthetic ones) on Linux, macOS and Windows.
 - Mode B, the factorial and centroid schemes, PLSc, interaction terms and higher-order constructs are the next candidates for the native path.
+
+## Amendment (28 October 2026): speed
+
+Profiling by switching parts off showed half of each resample in correlations computed pair by pair for HTMT and in the cross-loadings (needed only for seminr's signed zeros), each call recomputing column means. The kernel now computes the loadings with one `cov(Z, Y)` and HTMT with one `cor(Xb, Xb)`, compiled matrix forms that compute each column's mean and standard deviation once: 5.15 to 2.85 ms per resample of the ECSI model, results unchanged. `aw_boot_pls(cores = )` runs blocks of resamples in separate processes (forked on Linux and macOS, a socket cluster on Windows) rather than threads, because on 64-bit ARM the compiled `cov()` and `cor()` call into R, which is not thread-safe; the resample indices are drawn before the split, so results do not depend on the number of cores. Headline speed ratios against seminr use its fastest run, because its time varied from 212 to 655 s for the same 10,000 resamples on the benchmark laptop.
