@@ -8,6 +8,7 @@
  * generators, BLAS, LAPACK and LINPACK), the code below calls them, so that
  * the compiled operations return exactly what GNU R returns.
  */
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -122,14 +123,45 @@ static int32_t aw_colmeans(sl_f64 x, int64_t nr, int64_t nc, sl_f64 z)
  * and is clamped to [-1, 1]. Verified by black-box comparison with GNU R.
  * Returns NaN where R gives NA, warns or errors (lengths differ, n < 2,
  * non-finite data, a zero standard deviation): those calls go to R. */
-/* A sum of products as GNU R's C code accumulates it: on 64-bit ARM, where
- * long double is double, R is compiled with floating-point contraction, so
- * each product is added with a fused multiply-add; elsewhere the product and
- * the sum are rounded separately (in extended precision on x86-64). */
-#if (defined(__aarch64__) || defined(__arm64__)) && LDBL_MANT_DIG == DBL_MANT_DIG
-#define AW_ACC(s, a, b) ((s) = fma((a), (b), (s)))
-#else
-#define AW_ACC(s, a, b) ((s) += (a) * (b))
+/* On 64-bit ARM, GNU R's own cov() and cor() round their sums of products
+ * as its C compiler vectorises and fuses those loops, which a separate build
+ * cannot be relied on to repeat; there the compiled code calls the routine
+ * R itself uses (the stats package's registered "cov" and "cor"), so the
+ * result is R's by construction. R's headers are not included here (their
+ * Boolean type clashes with macOS headers), so the few entry points are
+ * declared directly. */
+#if defined(__aarch64__) || defined(__arm64__)
+#define AW_R_COV 1
+typedef struct SEXPREC *aw_sexp;
+typedef aw_sexp (*aw_covfn)(aw_sexp, aw_sexp, aw_sexp, aw_sexp);
+typedef void *(*aw_dlfn)(void);
+extern aw_dlfn R_FindSymbol(char const *name, char const *pkg, void *symbol);
+extern aw_sexp Rf_allocVector(unsigned int type, ptrdiff_t length);
+extern aw_sexp Rf_protect(aw_sexp s);
+extern void Rf_unprotect(int n);
+extern aw_sexp Rf_ScalarInteger(int x);
+extern aw_sexp Rf_ScalarLogical(int x);
+extern double *REAL(aw_sexp x);
+
+static double aw_cov2_r(sl_f64 x, sl_f64 y, int32_t cor)
+{
+    static aw_covfn fcov = NULL, fcor = NULL;
+    if (fcov == NULL) {
+        fcov = (aw_covfn) R_FindSymbol("cov", "stats", NULL);
+        fcor = (aw_covfn) R_FindSymbol("cor", "stats", NULL);
+    }
+    aw_covfn f = cor ? fcor : fcov;
+    if (f == NULL) return NAN;
+    aw_sexp xs = Rf_protect(Rf_allocVector(14u, (ptrdiff_t) x.len));
+    aw_sexp ys = Rf_protect(Rf_allocVector(14u, (ptrdiff_t) y.len));
+    memcpy(REAL(xs), x.data, (size_t) x.len * sizeof(double));
+    memcpy(REAL(ys), y.data, (size_t) y.len * sizeof(double));
+    aw_sexp na = Rf_protect(Rf_ScalarInteger(4)); /* use = "everything" */
+    aw_sexp kd = Rf_protect(Rf_ScalarLogical(0));
+    double r = REAL(f(xs, ys, na, kd))[0];
+    Rf_unprotect(4);
+    return r;
+}
 #endif
 
 static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
@@ -138,13 +170,23 @@ static double aw_cov2(sl_f64 x, sl_f64 y, int32_t cor)
     if (n != y.len || n < 2) return NAN;
     for (int64_t i = 0; i < n; i++)
         if (!isfinite(x.data[i]) || !isfinite(y.data[i])) return NAN;
+#ifdef AW_R_COV
+    if (cor) {
+        /* R warns for a zero standard deviation: leave such calls to R. */
+        int64_t i = 1, j = 1;
+        while (i < n && x.data[i] == x.data[0]) i++;
+        while (j < n && y.data[j] == y.data[0]) j++;
+        if (i == n || j == n) return NAN;
+    }
+    return aw_cov2_r(x, y, cor);
+#endif
     long double mx = aw_rmean(x), my = aw_rmean(y), sxy = 0.0;
-    for (int64_t i = 0; i < n; i++) AW_ACC(sxy, x.data[i] - mx, y.data[i] - my);
+    for (int64_t i = 0; i < n; i++) sxy += (x.data[i] - mx) * (y.data[i] - my);
     double c = (double) (sxy / (n - 1));
     if (!cor) return c;
     long double sxx = 0.0, syy = 0.0;
-    for (int64_t i = 0; i < n; i++) AW_ACC(sxx, x.data[i] - mx, x.data[i] - mx);
-    for (int64_t i = 0; i < n; i++) AW_ACC(syy, y.data[i] - my, y.data[i] - my);
+    for (int64_t i = 0; i < n; i++) sxx += (x.data[i] - mx) * (x.data[i] - mx);
+    for (int64_t i = 0; i < n; i++) syy += (y.data[i] - my) * (y.data[i] - my);
     double sx = (double) sqrtl(sxx / (n - 1)), sy = (double) sqrtl(syy / (n - 1));
     if (sx == 0.0 || sy == 0.0) return NAN;
     double r = c / (sx * sy);
