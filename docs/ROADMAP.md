@@ -30,6 +30,8 @@ Durations are estimates for a solo project lead working with AI agent teams ([AG
 
 **Exit:** every corpus function either compiles or falls back correctly; all compiled functions match GNU R within 1e-9; no memory errors under AddressSanitizer.
 
+**Exit met (verified 27 Oct 2026).** All 201 corpus functions compile and run natively, and their results are bit-identical to GNU R (stricter than 1e-9) on Linux, macOS (arm64) and Windows in CI; the fallback and bailout tests show that unsupported constructs and R's error cases go to GNU R with a recorded reason; the `asan` CI job built every unit with `-fsanitize=address` and ran the whole suite, 1,554 corpus checks included, with no sanitizer error; `R CMD check` is OK on all three systems. Carried into Phase 2: the typed IR and memory planner of 1.2 (code generation is direct from R's language objects today) and the optional TinyCC path of 1.4.
+
 ## Phase 2: Statistical engines (4–8 months)
 
 Each engine is validated against its reference package on 50 datasets.

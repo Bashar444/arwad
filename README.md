@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-1E3A5F?style=flat-square"></a>
-  <a href="docs/ROADMAP.md"><img alt="Status: Phase 1" src="https://img.shields.io/badge/Status-Phase%201-A16207?style=flat-square"></a>
+  <a href="docs/ROADMAP.md"><img alt="Status: Phase 1 complete" src="https://img.shields.io/badge/Status-Phase%201%20complete-1E3A5F?style=flat-square"></a>
   <a href="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml"><img alt="R-CMD-check" src="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml/badge.svg"></a>
   <a href="bench/phase0/REPORT.md"><img alt="Benchmark report" src="https://img.shields.io/badge/Benchmark-Phase%200%20report-1E3A5F?style=flat-square"></a>
   <a href="https://github.com/aardappel/goose"><img alt="Built on Goose" src="https://img.shields.io/badge/Built%20on-Goose%20v2026.3-1E3A5F?style=flat-square"></a>
@@ -17,7 +17,7 @@
 
 **A statistical programming language that keeps R's syntax and its package ecosystem, and compiles numerical work to native code with deterministic, garbage-collection-free memory.**
 
-> **Status:** Phase 1 in progress · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
+> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026; Phase 2, statistical engines, next) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
 >
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 
