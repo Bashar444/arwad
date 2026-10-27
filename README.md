@@ -17,7 +17,7 @@
 
 **A statistical programming language that keeps R's syntax and its package ecosystem, and compiles numerical work to native code with deterministic, garbage-collection-free memory.**
 
-> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 started: first engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop with bit-identical results ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
+> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 under way: engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop, and `aw_boot_glm()` a logistic regression 10.8× faster than a `glm()` loop, both with bit-identical results ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
 >
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 

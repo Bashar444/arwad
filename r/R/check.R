@@ -29,7 +29,7 @@ aw_arity <- list(
   "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
   "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2,
   "floor" = 1L, "ceiling" = 1L, "runif" = 1:3, "rnorm" = 1:3,
-  "sample" = 1:3, "sample.int" = 1:3, "$" = 2L, ".lm.fit" = 2L,
+  "sample" = 1:3, "sample.int" = 1:3, "$" = 2L, ".lm.fit" = 2:3, "drop" = 1L,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,
   "sqrt" = 1L, "exp" = 1L, "log" = 1L, "abs" = 1L, "sum" = 1L, "is.na" = 1L,
   "c" = c(1L, Inf), "mean" = 1L, "min" = c(1L, Inf), "max" = c(1L, Inf)
@@ -41,14 +41,15 @@ aw_argnames <- list(numeric = "length", integer = "length", logical = "length",
                     matrix = c("data", "nrow", "ncol"), crossprod = c("x", "y"),
                     solve = c("a", "b"), runif = c("n", "min", "max"), rnorm = c("n", "mean", "sd"),
                     sample = c("x", "size", "replace"), sample.int = c("n", "size", "replace"),
-                    .lm.fit = c("x", "y"))
+                    .lm.fit = c("x", "y", "tol"))
 
 # Compiled functions that do not live in base, by their package.
 aw_home <- c(runif = "stats", rnorm = "stats", .lm.fit = "stats")
 
-# The parts of a .lm.fit() result that compile: .lm.fit(x, y)$coefficients
-# and $residuals. Other lists and `$` are outside the subset.
-aw_lmfit_fields <- c("coefficients", "residuals")
+# The parts of a .lm.fit() result that compile, taken directly
+# (.lm.fit(x, y)$coefficients) or from a variable (fit <- .lm.fit(x, y);
+# fit$rank). Other lists and `$` are outside the subset.
+aw_lmfit_fields <- c("coefficients", "residuals", "rank", "pivot")
 
 # Arguments of a call in the order of `formals`, matching exact names first
 # and then positions, as R does (partial names are not accepted).
@@ -278,10 +279,10 @@ aw_walk <- function(e, defs, s, in_for_seq = FALSE) {
     },
     "$" = {
       inner <- args[[1L]]
-      if (!(is.call(inner) && identical(inner[[1L]], as.name(".lm.fit"))))
-        aw_unsupported("lists and `$` are outside subset v0 (except .lm.fit(x, y)$coefficients and $residuals)", e)
+      if (!is.symbol(inner) && !(is.call(inner) && identical(inner[[1L]], as.name(".lm.fit"))))
+        aw_unsupported("lists and `$` are outside subset v0 (except the result of .lm.fit())", e)
       if (!is.symbol(args[[2L]]) || !(as.character(args[[2L]]) %in% aw_lmfit_fields))
-        aw_unsupported("only $coefficients and $residuals of .lm.fit() are compiled", e)
+        aw_unsupported("only $coefficients, $residuals, $rank and $pivot of .lm.fit() are compiled", e)
       aw_walk(inner, defs, s)
     },
     "[" = , "[[" = {

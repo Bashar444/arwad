@@ -24,8 +24,8 @@ Each replicate draws \code{nrow(X)} rows with replacement
 R's own LINPACK QR, which \code{\link[stats:lm]{stats::lm()}} uses too. The loop runs as native
 code when the Arwad toolchain is available (\code{\link[=aw_toolchain]{aw_toolchain()}}) and in GNU R
 otherwise; for the same seed both give identical results. A replicate whose
-resampled design is rank-deficient is handed to GNU R, which returns the
-coefficients \code{.lm.fit()} gives (pivoted).
+resampled design is rank-deficient gets the coefficients \code{.lm.fit()} gives
+(pivoted).
 }
 \examples{
 X <- cbind(intercept = 1, wt = mtcars$wt, hp = mtcars$hp)

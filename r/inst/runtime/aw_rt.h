@@ -4,8 +4,9 @@
  * Goose's own type declarations, so the slice types sl_f64 and sl_i32 are in
  * scope. The generated code returns its result through the aw_ret_* calls,
  * which copy it out of Goose memory; the unit's shim then hands it to R.
- * Nothing here calls into R except R_pow, R's own power function, so that
- * x ^ y gives exactly what GNU R gives.
+ * Where R's own C routines give R's results (R_pow, the random number
+ * generators, BLAS, LAPACK and LINPACK), the code below calls them, so that
+ * the compiled operations return exactly what GNU R returns.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,10 @@
 #include <float.h>
 
 double R_pow(double x, double y);
+
+/* x ^ y as R's arithmetic gives it: a square is x * x, any other power R_pow
+ * (which can use long double powl and round a square differently). */
+static double aw_pow(double x, double y) { return y == 2.0 ? x * x : R_pow(x, y); }
 double Rf_runif(double a, double b);    /* R's runif() for one draw: unif_rand() */
 double Rf_rnorm(double mu, double sigma); /* R's rnorm() for one draw: norm_rand() */
 double R_unif_index(double dn);           /* R's index draw for sample(), by sample.kind */
@@ -257,38 +262,41 @@ static int32_t aw_solve(sl_f64 a, int64_t n, sl_f64 b, int64_t p)
     return bad;
 }
 
-/* .lm.fit(x, y): R's own LINPACK least squares (dqrls, Householder QR with
- * limited pivoting) with .lm.fit's default tolerance 1e-7, as lm() uses it.
- * Fills coef (p) and resid (n). Returns 1, leaving the call to GNU R, for
- * non-finite data (R errors) or a rank-deficient design (R pivots and
- * reorders). */
-#include <R_ext/Applic.h>
+/* .lm.fit(x, y, tol): R's own LINPACK least squares (dqrls, Householder QR
+ * with limited pivoting), as lm() and glm() use it. Fills coef (p), resid (n)
+ * and pivot (p) as .lm.fit() returns them, pivoted when the design is rank
+ * deficient, and returns the rank; -1 leaves the call to GNU R, for data or a
+ * tolerance R rejects (non-finite values).
+ * The prototype is R's (R_ext/Applic.h). The header itself is not included:
+ * its Rboolean enum clashes with a macOS system header that Goose's
+ * standalone runtime includes. */
+void F77_NAME(dqrls)(double *x, int *n, int *p, double *y, int *ny, double *tol, double *b, double *rsd,
+                     double *qty, int *k, int *jpvt, double *qraux, double *work);
 
-static int32_t aw_lmfit(sl_f64 x, int64_t n, int64_t p, sl_f64 y, sl_f64 coef, sl_f64 resid)
+static int32_t aw_lmfit(sl_f64 x, int64_t n, int64_t p, sl_f64 y, double tol, sl_f64 coef, sl_f64 resid,
+                        sl_i32 pivot)
 {
-    if (n <= 0 || p <= 0) return 1;
-    for (int64_t i = 0; i < x.len; i++) if (!isfinite(x.data[i])) return 1;
-    for (int64_t i = 0; i < y.len; i++) if (!isfinite(y.data[i])) return 1;
+    if (n <= 0 || p <= 0 || !(tol >= 0.0) || !isfinite(tol)) return -1;
+    for (int64_t i = 0; i < x.len; i++) if (!isfinite(x.data[i])) return -1;
+    for (int64_t i = 0; i < y.len; i++) if (!isfinite(y.data[i])) return -1;
     int nn = (int) n, pp = (int) p, ny = 1, rank = 0;
-    double tol = 1e-7;
     double *qr = malloc((size_t) (n * p) * sizeof(double));
     double *yy = malloc((size_t) n * sizeof(double));
     double *eff = malloc((size_t) n * sizeof(double));
     double *qraux = malloc((size_t) p * sizeof(double));
     double *work = malloc((size_t) (2 * p) * sizeof(double));
-    int *pivot = malloc((size_t) p * sizeof(int));
-    int32_t bad = (qr == NULL || yy == NULL || eff == NULL || qraux == NULL || work == NULL || pivot == NULL);
-    if (!bad) {
+    int32_t out = -1;
+    if (qr != NULL && yy != NULL && eff != NULL && qraux != NULL && work != NULL) {
         memcpy(qr, x.data, (size_t) (n * p) * sizeof(double));
         memcpy(yy, y.data, (size_t) n * sizeof(double));
         memcpy(resid.data, y.data, (size_t) n * sizeof(double));
         memcpy(eff, y.data, (size_t) n * sizeof(double));
-        for (int i = 0; i < pp; i++) pivot[i] = i + 1;
-        F77_CALL(dqrls)(qr, &nn, &pp, yy, &ny, &tol, coef.data, resid.data, eff, &rank, pivot, qraux, work);
-        if (rank < pp) bad = 1;
+        for (int i = 0; i < pp; i++) pivot.data[i] = i + 1;
+        F77_CALL(dqrls)(qr, &nn, &pp, yy, &ny, &tol, coef.data, resid.data, eff, &rank, pivot.data, qraux, work);
+        out = rank;
     }
-    free(qr); free(yy); free(eff); free(qraux); free(work); free(pivot);
-    return bad;
+    free(qr); free(yy); free(eff); free(qraux); free(work);
+    return out;
 }
 
 /* Called by the shim after the entry returns: hands over the result buffer. */

@@ -1,3 +1,24 @@
+# arwad 0.0.0.9009
+
+* Second Phase 2 engine: `aw_glm_fit()` and `aw_boot_glm()`, iteratively
+  reweighted least squares for binomial (logit), Poisson (log) and Gaussian
+  (identity) models, compiled. Coefficients, deviance and iteration counts
+  are bit-identical to `glm.fit()` on 55 designs for each family; every fit
+  for which `glm.fit()` warns or errors is handed to `glm.fit()`, so warnings
+  are R's too. Re-implemented from R's documentation and black-box tests.
+* `fit <- .lm.fit(x, y, tol)` compiles, with `fit$coefficients`,
+  `$residuals`, `$rank` and `$pivot`; rank-deficient designs now run
+  natively, pivoted exactly as R pivots them.
+* `drop()` compiles; so does `x[i] <- v` with an index vector and a value
+  vector (zero indices dropped, value recycled, as in R).
+* Fix: `x ^ 2` is computed as `x * x`, as R's arithmetic does; R's C
+  function `R_pow()` can round squares differently on 64-bit Windows.
+* Fix: `sqrt()` is always the processor's correctly rounded square root
+  (units are built with `-fno-math-errno`); GCC could otherwise call the C
+  library's `sqrt()`, which on Windows rounds some results differently.
+* Fix: the portable build path (R CMD SHLIB) works on macOS again; R's
+  `R_ext/Applic.h` is no longer included.
+
 # arwad 0.0.0.9008
 
 * First Phase 2 engine: `aw_boot_ols()`, a compiled case-resampling

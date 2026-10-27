@@ -229,7 +229,24 @@ cx_index_read <- function(cx, x, i, strict, e) {
 cx_index_write <- function(cx, nm, i, v, e) {
   var <- get0(nm, envir = cx$vars, inherits = FALSE)
   if (var$kind != "v") aw_unsupported(sprintf("sub-assignment into the scalar '%s' is planned for a later slice", nm), e)
-  if (v$kind != "s") aw_unsupported("assigning a vector into x[i] is planned for a later slice", e)
+  if (!(v$type %in% c("null", "exit")) && v$kind != "s") {
+    if (i$type %in% c("null", "exit", "lgl") || i$kind == "s")
+      aw_unsupported("assigning a vector into x[i] with a single or a logical index is planned for a later slice", e)
+    if (aw_rank[[v$type]] > aw_rank[[var$type]])
+      aw_unsupported(sprintf("assigning a %s vector into '%s' would change it from %s to %s; subset v0 keeps one type per variable",
+                             aw_tname[[v$type]], nm, aw_tname[[var$type]], aw_tname[[v$type]]), e)
+    if (v$type != var$type && var$type != "dbl")
+      aw_unsupported("assigning a logical vector into an integer vector is planned for a later slice", e)
+    src <- if (v$type == var$type) v$g else cx_dbl_data(cx, v, e)
+    if (src == var$g) {
+      # x[i] <- x: R assigns from the value as it was before the assignment.
+      src <- cx_tmp(cx)
+      cx_emit(cx, sprintf("var %s: %s[>..] = [];", src, aw_g[[var$type]]))
+      cx_emit(cx, sprintf("%s.append(%s);", src, var$g))
+    }
+    cx_write_scatter(cx, var, i, src, e)
+    return(v)
+  }
   cx_scalar(v, e)
   if (aw_rank[[v$type]] > aw_rank[[var$type]])
     aw_unsupported(sprintf("assigning a %s into '%s' would change it from %s to %s; subset v0 keeps one type per variable",
@@ -303,14 +320,14 @@ cx_arith <- function(cx, op, a, b, e) {
   }
   if (op == "^" && ints) {
     # R: 1L ^ y and x ^ 0L are 1, then NA if either is NA.
-    cx_emit(cx, sprintf("let %s: f64 = if %s == 1 || %s == 0 { 1.0 } else if %s == na_i || %s == na_i { na_real } else { aw_r_pow(%s, %s) };",
+    cx_emit(cx, sprintf("let %s: f64 = if %s == 1 || %s == 0 { 1.0 } else if %s == na_i || %s == na_i { na_real } else { aw_pow(%s, %s) };",
                         t, a$g, b$g, a$g, b$g, a$g, b$g))
     return(aw_val(t, "dbl"))
   }
   da <- cx_as(cx, a, "dbl")$g
   db <- cx_as(cx, b, "dbl")$g
   if (op == "^") {
-    cx_emit(cx, sprintf("let %s: f64 = aw_r_pow(%s, %s);", t, da, db))
+    cx_emit(cx, sprintf("let %s: f64 = aw_pow(%s, %s);", t, da, db))
   } else if (op %in% c("+", "*")) {
     cx_emit(cx, sprintf("let %s: f64 = aw_d%s(%s, %s);", t, if (op == "+") "add" else "mul", da, db))
   } else {
@@ -645,6 +662,44 @@ cx_write_mask <- function(cx, var, i, cv, e) {
 
 # x[idx] <- v for an index vector: NA and zero indices are skipped, as R does
 # with a single value; GNU R takes over for negative indices.
+# x[i] <- v with an index vector and a value vector: R drops zero indices and
+# recycles v over the remaining positions. NA or negative indices (an error
+# or a complement), a value R cannot recycle evenly (a warning) and an empty
+# value (an error) are left to GNU R.
+cx_write_scatter <- function(cx, var, i, src, e) {
+  b <- cx_bail(cx, "an index or a value that R rejects or warns about in x[i] <- v", e)
+  cnt <- cx_tmp(cx)
+  k <- cx_tmp(cx)
+  p <- cx_tmp(cx)
+  s <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: i64 = 0;", cnt))
+  cx_open(cx, sprintf("for %s in 0..%s.len", k, i$g))
+  if (i$type == "int") {
+    cx_emit(cx, sprintf("if %s[%s] == na_i || %s[%s] < 0 { %s }", i$g, k, i$g, k, b))
+    cx_emit(cx, sprintf("if %s[%s] != 0 { %s += 1; }", i$g, k, cnt))
+  } else {
+    cx_emit(cx, sprintf("if aw_isnan(%s[%s]) || %s[%s] <= -1.0 || %s[%s] >= 2147483648.0 { %s }",
+                        i$g, k, i$g, k, i$g, k, b))
+    cx_emit(cx, sprintf("if %s[%s] >= 1.0 { %s += 1; }", i$g, k, cnt))
+  }
+  cx_close(cx)
+  cx_emit(cx, sprintf("if %s > 0 && (%s.len == 0 || %s %% %s.len != 0) { %s }", cnt, src, cnt, src, b))
+  cx_emit(cx, sprintf("var %s: i64 = 0;", s))
+  cx_open(cx, sprintf("for %s in 0..%s.len", k, i$g))
+  if (i$type == "int") {
+    cx_open(cx, sprintf("if %s[%s] != 0", i$g, k))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s];", p, i$g, k))
+  } else {
+    cx_open(cx, sprintf("if %s[%s] >= 1.0", i$g, k))
+    cx_emit(cx, sprintf("let %s: i64 = %s[%s] as i64;", p, i$g, k))
+  }
+  cx_emit(cx, sprintf("if %s > %s.len { %s.resize(%s, %s); }", p, var$g, var$g, p, aw_na[[var$type]]))
+  cx_emit(cx, sprintf("%s[%s - 1] = %s[%s];", var$g, p, src, s))
+  cx_emit(cx, sprintf("%s += 1; if %s == %s.len { %s = 0; }", s, s, src, s))
+  cx_close(cx)
+  cx_close(cx)
+}
+
 cx_write_gather <- function(cx, var, i, cv, e) {
   k <- cx_tmp(cx)
   p <- cx_tmp(cx)
@@ -702,6 +757,8 @@ aw_tail <- function(cx, e) {
     return(invisible())
   }
   if (h %in% c("<-", "=", "for", "while", "repeat")) {
+    if (h %in% c("<-", "=") && cx_head(e[[3L]]) == ".lm.fit")
+      aw_unsupported("a function whose value is a .lm.fit() result (a list)", e)
     return(cx_return(cx, aw_gen(cx, e, want = FALSE), FALSE))
   }
   cx_return(cx, aw_gen(cx, e), TRUE)
@@ -715,6 +772,8 @@ aw_gen <- function(cx, e, want = TRUE) {
     if (nm == "pi") return(aw_val(sprintf("%a", pi), "dbl"))
     if (nm == "T") return(aw_val("1", "lgl"))
     if (nm == "F") return(aw_val("0", "lgl"))
+    if (exists(nm, envir = cx$records, inherits = FALSE))
+      aw_unsupported(sprintf("'%s' holds a .lm.fit() result (a list); use %s$coefficients, $residuals, $rank or $pivot", nm, nm))
     aw_unsupported(sprintf("internal: unknown name '%s'", nm))
   }
   if (is.atomic(e)) {
@@ -751,6 +810,18 @@ aw_gen <- function(cx, e, want = TRUE) {
         if (cx_head(a[[2L]]) %in% c("numeric", "integer", "logical")) {
           return(cx_ctor(cx, a[[2L]], into = t))
         }
+        if (cx_head(a[[2L]]) == ".lm.fit") {
+          # A list of known shape: each part is a variable of its own.
+          if (want) aw_unsupported("the value of an assignment of a .lm.fit() result (a list)", e)
+          if (!is.null(get0(t, envir = cx$vars, inherits = FALSE)))
+            aw_unsupported(sprintf("variable '%s' holds both a .lm.fit() result and another value", t), e)
+          rec <- cx_lmfit_call(cx, a[[2L]], e)
+          for (fld in names(rec)) cx_assign(cx, paste0(t, "$", fld), rec[[fld]], e)
+          assign(t, TRUE, envir = cx$records)
+          return(aw_val("", "null"))
+        }
+        if (exists(t, envir = cx$records, inherits = FALSE))
+          aw_unsupported(sprintf("variable '%s' holds both a .lm.fit() result and another value", t), e)
         var <- cx_assign(cx, t, aw_gen(cx, a[[2L]]), e)
         return(aw_val(var$g, var$type, var$kind))
       }
@@ -874,10 +945,14 @@ aw_gen <- function(cx, e, want = TRUE) {
     "runif" = , "rnorm" = cx_random(cx, nm, a, e),
     "sample" = , "sample.int" = cx_sample(cx, nm, a, e),
     "$" = {
-      m <- aw_match_args(as.list(a[[1L]])[-1L], c("x", "y"))
-      cx_lmfit(cx, aw_gen(cx, m$x), aw_gen(cx, m$y), as.character(a[[2L]]), e)
+      fld <- as.character(a[[2L]])
+      if (!is.symbol(a[[1L]])) return(cx_lmfit_call(cx, a[[1L]], e)[[fld]])
+      v <- get0(paste0(as.character(a[[1L]]), "$", fld), envir = cx$vars, inherits = FALSE)
+      if (is.null(v)) aw_unsupported("`$` of a value that is not a .lm.fit() result", e)
+      aw_val(v$g, v$type, v$kind, v$nr, v$nc)
     },
-    ".lm.fit" = aw_unsupported(".lm.fit() returns a list; use .lm.fit(x, y)$coefficients or $residuals", e),
+    ".lm.fit" = aw_unsupported(".lm.fit() returns a list; assign it (fit <- .lm.fit(x, y)) or take $coefficients, $residuals, $rank or $pivot", e),
+    "drop" = cx_drop(cx, aw_gen(cx, a[[1L]]), e),
     "c" = cx_c(cx, lapply(a, function(z) aw_gen(cx, z)), e),
     "mean" = cx_mean(cx, aw_gen(cx, a[[1L]]), e),
     "min" = , "max" = cx_extreme(cx, nm, lapply(a, function(z) aw_gen(cx, z)), e),
@@ -943,7 +1018,7 @@ aw_rt_externs <- c(
   "extern fn aw_crossprod1(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
   "extern fn aw_crossprod2(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, z: f64[:]) -> i32;",
   "extern fn aw_solve(a: const f64[:], n: i64, b: f64[:], p: i64) -> i32;",
-  "extern fn aw_lmfit(x: const f64[:], n: i64, p: i64, y: const f64[:], coef: f64[:], resid: f64[:]) -> i32;",
+  "extern fn aw_lmfit(x: const f64[:], n: i64, p: i64, y: const f64[:], tol: f64, coef: f64[:], resid: f64[:], pivot: i32[:]) -> i32;",
   "extern fn aw_ret_dblm(x: const f64[:], nr: i64, nc: i64);",
   "extern fn aw_ret_intm(x: const i32[:], nr: i64, nc: i64);",
   "extern fn aw_ret_lglm(x: const i32[:], nr: i64, nc: i64);",
@@ -953,7 +1028,7 @@ aw_rt_externs <- c(
   "extern fn aw_rmean(x: const f64[:]) -> f64;",
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
   "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
-  'extern "R_pow" fn aw_r_pow(x: f64, y: f64) -> f64;',
+  "extern fn aw_pow(x: f64, y: f64) -> f64;",
   'extern "sqrt" fn aw_c_sqrt(x: f64) -> f64;',
   'extern "exp" fn aw_c_exp(x: f64) -> f64;',
   'extern "log" fn aw_c_log(x: f64) -> f64;',
@@ -977,6 +1052,7 @@ aw_codegen <- function(info, f, types, label) {
   cx$nv <- 0L
   cx$bails <- character()
   cx$vars <- new.env(parent = emptyenv())
+  cx$records <- new.env(parent = emptyenv())
   params <- character()
   copies <- character()
   sig <- character()

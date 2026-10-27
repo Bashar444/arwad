@@ -38,8 +38,8 @@ Each engine is validated against its reference package on 50 datasets.
 
 | Engine | Reference | Status (27 Oct 2026) |
 |---|---|---|
-| OLS, WLS, GLM (IRLS) | `stats::lm`, `stats::glm` | ◐ OLS done: `.lm.fit()` compiled through R's own LINPACK, bit-identical on 55 designs; engine `aw_boot_ols()` (bootstrap) 43.7× faster than an `lm()` loop ([bench/phase2/REPORT.md](../bench/phase2/REPORT.md)); WLS and GLM next |
-| PLS-SEM path algorithm with 10,000-replicate bootstrap and bias-corrected percentile intervals | `seminr` | planned (next after GLM) |
+| OLS, WLS, GLM (IRLS) | `stats::lm`, `stats::glm` | ◐ OLS done: `.lm.fit()` compiled through R's own LINPACK, bit-identical on 55 designs; engine `aw_boot_ols()` (bootstrap) 43.7× faster than an `lm()` loop. GLM done (27 Oct 2026): `aw_glm_fit()` and `aw_boot_glm()` for binomial, Poisson and Gaussian models, bit-identical to `glm.fit()` on 55 designs per family, warnings included ([bench/phase2/REPORT.md](../bench/phase2/REPORT.md)). WLS: weighted Gaussian fits match `glm.fit()`; a check against `lm(weights = )` is pending |
+| PLS-SEM path algorithm with 10,000-replicate bootstrap and bias-corrected percentile intervals | `seminr` | planned (next) |
 | DEA (CCR and BCC; input and output orientation) | `Benchmarking` | planned |
 | Panel fixed and random effects; Hausman test | `plm` | planned |
 | ARIMA likelihood; GARCH(1,1) family | `stats::arima`, `rugarch` | planned |

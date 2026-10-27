@@ -8,8 +8,11 @@
 aw_state <- new.env(parent = emptyenv())
 
 # -ffp-contract=off: no fused multiply-add, so each operation rounds as R's do.
+# -fno-math-errno: sqrt() is always the processor's correctly rounded square
+# root; with errno, GCC may call the C library's instead, and on Windows that
+# one rounds some results to the neighbouring double.
 # R's own LAPACK and BLAS, as packages link them, for %*%, crossprod() and solve().
-aw_makevars <- c("PKG_CFLAGS = -ffp-contract=off", "PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) -lm")
+aw_makevars <- c("PKG_CFLAGS = -ffp-contract=off -fno-math-errno", "PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) -lm")
 
 #' Find the Goose toolchain
 #'

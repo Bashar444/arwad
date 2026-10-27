@@ -81,6 +81,15 @@ Verified by [`r/inst/corpus/slice3.R`](../r/inst/corpus/slice3.R) (7 functions, 
 - `sample(x, size, replace)` and `sample.int(n, size, replace)`: indices from R's own `R_unif_index()` (so `RNGkind(sample.kind = ...)` is honoured), drawn directly with replacement or for fewer than two draws, otherwise from a shrinking pool, as R does. Left to GNU R: `prob`, a single number given to `sample()` where R samples `1:x` from a vector argument, and R's errors (a sample larger than the population without replacement, an `NA` `replace`).
 - Not yet: `set.seed()` inside a compiled function, other distributions.
 
+### Phase 2 additions (27 October 2026): least squares, `drop()`, vector sub-assignment
+
+Verified by [`r/tests/testthat/test-engines.R`](../r/tests/testthat/test-engines.R) and by the engines built on them:
+
+- `.lm.fit(x, y, tol)` through R's own LINPACK `dqrls`, either taken directly (`.lm.fit(x, y)$coefficients`) or kept in a variable (`fit <- .lm.fit(x, y, tol = t)`) whose parts `fit$coefficients`, `fit$residuals`, `fit$rank` and `fit$pivot` are values of their own. Rank-deficient designs run natively and are pivoted exactly as R pivots them. A `.lm.fit()` result used as a whole (returned, or assigned to another variable) is outside the subset; data with `NA`, `NaN` or infinite values, which `.lm.fit()` rejects, are left to GNU R.
+- `drop()` of a matrix with one row or one column gives a vector; any other matrix is left to GNU R, where it stays a matrix.
+- `x[i] <- v` with an integer or double index vector and a value vector: zero indices are dropped and `v` is recycled over the remaining positions, as in R. Left to GNU R: `NA` or negative indices, a value whose length does not divide the number of positions (R warns), and an empty value (R errors).
+- Rounding fixes found by the engines: `x ^ 2` is computed as `x * x`, as R's arithmetic computes it, and `sqrt()` is always the processor's correctly rounded square root.
+
 ### Equivalence corpus (26 October 2026): 201 functions
 
 [`r/inst/corpus/`](../r/inst/corpus/) `slice1.R` to `slice5.R` hold 201 functions, beyond the Phase 1 target of 200: the slices above, plus statistics, estimators, numerical methods, finance and time series, linear algebra (IRLS logistic regression, Jacobi, LU), rank statistics, integer algorithms and simulation. Every one runs natively and matches GNU R bit for bit on Linux, macOS and Windows; seeded ones also match `.Random.seed`.

@@ -254,21 +254,43 @@ cx_solve <- function(cx, a, b, e) {
 # .lm.fit(x, y)$coefficients or $residuals through R's own LINPACK dqrls, as
 # lm() computes them; a mismatched y, non-finite data or a rank-deficient
 # design (where R errors, or pivots and reorders) are left to GNU R.
-cx_lmfit <- function(cx, x, y, field, e) {
+cx_lmfit <- function(cx, x, y, tol, e) {
   if (x$kind != "m") aw_unsupported(".lm.fit() of an x that is not a matrix", e)
   if (y$kind == "m") aw_unsupported(".lm.fit() with a matrix y is planned for a later slice", e)
   xd <- cx_dbl_data(cx, x, e)
   yd <- cx_dbl_data(cx, y, e)
+  tl <- if (is.null(tol)) sprintf("%a", 1e-07) else cx_as(cx, cx_scalar(cx_scalarize(cx, tol, e), e), "dbl")$g
   cx_emit(cx, sprintf("if %s != %s { %s }", cx_len(y), x$nr, cx_bail(cx, "a y whose length is not nrow(x) (R errors)", e)))
   cf <- cx_tmp(cx)
   rs <- cx_tmp(cx)
+  pv <- cx_tmp(cx)
+  rk <- cx_tmp(cx)
   cx_emit(cx, sprintf("var %s: f64[>..] = [];", cf))
   cx_emit(cx, sprintf("%s.resize(%s, 0.0);", cf, x$nc))
   cx_emit(cx, sprintf("var %s: f64[>..] = [];", rs))
   cx_emit(cx, sprintf("%s.resize(%s, 0.0);", rs, x$nr))
-  cx_emit(cx, sprintf("if aw_lmfit(%s, %s, %s, %s, %s, %s) != 0 { %s }", xd, x$nr, x$nc, yd, cf, rs,
-                      cx_bail(cx, "a design .lm.fit() would reject or rank-reduce (non-finite data or rank deficiency)", e)))
-  aw_val(if (field == "coefficients") cf else rs, "dbl", "v")
+  cx_emit(cx, sprintf("var %s: i32[>..] = [];", pv))
+  cx_emit(cx, sprintf("%s.resize(%s, 0);", pv, x$nc))
+  cx_emit(cx, sprintf("let %s: i32 = aw_lmfit(%s, %s, %s, %s, %s, %s, %s, %s);", rk, xd, x$nr, x$nc, yd, tl, cf, rs, pv))
+  cx_emit(cx, sprintf("if %s < 0 { %s }", rk, cx_bail(cx, "data or a tolerance that .lm.fit() rejects (non-finite values)", e)))
+  list(coefficients = aw_val(cf, "dbl", "v"), residuals = aw_val(rs, "dbl", "v"),
+       rank = aw_val(rk, "int"), pivot = aw_val(pv, "int", "v"))
+}
+
+# .lm.fit(x, y, tol) as written in the body.
+cx_lmfit_call <- function(cx, call, e) {
+  m <- aw_match_args(as.list(call)[-1L], c("x", "y", "tol"))
+  cx_lmfit(cx, aw_gen(cx, m$x), aw_gen(cx, m$y), if (!is.null(m$tol)) aw_gen(cx, m$tol), e)
+}
+
+# drop(): a matrix with one row or one column becomes a vector, as R drops
+# extents of 1; any other matrix stays a matrix in R and is left to GNU R.
+cx_drop <- function(cx, v, e) {
+  if (v$type %in% c("null", "exit")) aw_unsupported("drop() of no value", e)
+  if (v$kind != "m") return(v)
+  cx_emit(cx, sprintf("if %s != 1 && %s != 1 { %s }", v$nr, v$nc,
+                      cx_bail(cx, "drop() of a matrix with no extent of 1 (it stays a matrix)", e)))
+  aw_val(v$g, v$type, "v")
 }
 
 # t(): a matrix transposed; a vector or a scalar becomes one row.
