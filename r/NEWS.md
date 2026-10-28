@@ -1,6 +1,7 @@
 # arwad 0.1.0
 
-First citable release (28 October 2026), archived on Zenodo.
+First citable release (28 October 2026), archived on Zenodo:
+<https://doi.org/10.5281/zenodo.23725078>.
 
 * `aw_compile()` compiles R functions written in a statistical subset
   (scalars, vectors and matrices, loops, R's random-number streams, BLAS and

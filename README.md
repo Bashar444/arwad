@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-1E3A5F?style=flat-square"></a>
+  <a href="https://doi.org/10.5281/zenodo.23725077"><img alt="DOI 10.5281/zenodo.23725077" src="https://zenodo.org/badge/DOI/10.5281/zenodo.23725077.svg"></a>
   <a href="docs/ROADMAP.md"><img alt="Status: Phase 2, three engines" src="https://img.shields.io/badge/Status-Phase%202%2C%20three%20engines-1E3A5F?style=flat-square"></a>
   <a href="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml"><img alt="R-CMD-check" src="https://github.com/bashar-al-agha/arwad/actions/workflows/r-check.yml/badge.svg"></a>
   <a href="bench/phase2/REPORT.md"><img alt="Benchmark report" src="https://img.shields.io/badge/Benchmarks-Phase%202%20report-1E3A5F?style=flat-square"></a>
@@ -50,6 +51,12 @@ remotes::install_github("bashar-al-agha/arwad", subdir = "r")
 ```
 
 Compiling needs Goose v2026.3 and the C compiler R uses for packages (Rtools on Windows); `aw_toolchain()` says whether both were found. Without them every function still runs, in GNU R. A step-by-step guide is at [langwi.com/get-started](https://langwi.com/get-started).
+
+## Cite
+
+> Al Agha, B. (2026). *Arwad: R, compiled* (Version 0.1.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23725078
+
+That DOI is version 0.1.0's; [10.5281/zenodo.23725077](https://doi.org/10.5281/zenodo.23725077) always points to the newest release. GitHub's *Cite this repository* button reads the same details from [CITATION.cff](CITATION.cff).
 
 ## The idea
 

@@ -9,6 +9,14 @@ authors:
     orcid: "https://orcid.org/0009-0004-5178-2345"
     affiliation: "SRM Institute of Science and Technology"
     email: "ba8160@srmist.edu.in"
+doi: "10.5281/zenodo.23725077"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23725077"
+    description: "Concept DOI: every version of Arwad"
+  - type: doi
+    value: "10.5281/zenodo.23725078"
+    description: "Version 0.1.0"
 repository-code: "https://github.com/bashar-al-agha/arwad"
 license: MIT
 version: "0.1.0"
