@@ -80,10 +80,10 @@ r10 <- t(vapply(1:3, function(k) {
 }, numeric(3)))
 print(r10)
 same10 <- TRUE
-m10 <- apply(r10, 2, stats::median) * 1000
+m10 <- round(apply(r10, 2, stats::median) * 1000)
 res <- rbind(res, data.frame(contender = c("arwad", "arwad_all_cores", "seminr_all_cores", "seminr_all_cores_fastest"),
                              replicates = 10000L, median_ms = c(m10[["arwad"]], m10[["arwad_all_cores"]], m10[["seminr"]], min(r10[, "seminr"]) * 1000),
-                             arwad_speedup = round(c(1, m10[["arwad_all_cores"]], m10[["seminr"]], min(r10[, "seminr"]) * 1000) / m10[["arwad"]], 2)))
+                             arwad_speedup = round(c(m10[["arwad"]], m10[["arwad_all_cores"]], m10[["seminr"]], min(r10[, "seminr"]) * 1000) / m10[["arwad"]], 2)))
 print(res, row.names = FALSE)
 cat(sprintf(paste0("\nECSI model: 7 constructs, 24 indicators, n = 250; cores = %d (seminr's default and arwad_all_cores); first call (build) %.2f s\n",
                    "identical to seminr (paths, loadings, weights, total effects): %s; at 10,000 resamples: %s\n",
