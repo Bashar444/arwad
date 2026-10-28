@@ -70,7 +70,7 @@ card <- function(th) {
     sprintf('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-labelledby="t d">', W, H, W, H),
     '<title id="t">Arwad, Phase 2 results</title>',
     sprintf('<desc id="d">%s</desc>', esc(paste0("Times faster than R: ", paste(vapply(rows, function(r) paste(fmt(r$x), r$note), ""), collapse = "; "),
-                                                  ". Results bit-identical to R and seminr."))),
+                                                  ". Results bit-identical to R and seminr (HTMT within four units in the last place)."))),
     sprintf('<rect x="0.5" y="0.5" width="%d" height="%d" rx="14" fill="%s" stroke="%s"/>', W - 1, H - 1, th[["bg"]], th[["border"]]),
     sprintf('<text x="%d" y="48" font-family="%s" font-size="14" font-weight="700" letter-spacing="2" fill="%s">ARWAD · R, COMPILED · PHASE 2 RESULTS</text>', x0, mono, th[["gold"]]),
     sprintf('<text x="%d" y="86" font-family="%s" font-size="28" font-weight="700" fill="%s">The same answers as R, bit for bit, from native code</text>', x0, sans, th[["ink"]]),
@@ -79,8 +79,8 @@ card <- function(th) {
   foot <- c(
     sprintf('<rect x="%d" y="%d" width="%d" height="64" rx="8" fill="%s"/>', x0, y, W - 2 * x0, th[["band"]]),
     sprintf('<rect x="%d" y="%d" width="5" height="64" rx="2" fill="%s"/>', x0, y, th[["gold"]]),
-    sprintf('<text x="%d" y="%d" font-family="%s" font-size="15" font-weight="700" fill="%s">Bit-identical to GNU R and seminr, checked on Linux, macOS and Windows in every CI run</text>', x0 + 20, y + 26, sans, th[["ink"]]),
-    sprintf('<text x="%d" y="%d" font-family="%s" font-size="14" fill="%s">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 53 PLS-SEM models · bench/phase2/REPORT.md</text>', x0 + 20, y + 48, sans, th[["muted"]]),
+    sprintf('<text x="%d" y="%d" font-family="%s" font-size="15" font-weight="700" fill="%s">Bit-identical to GNU R and seminr (HTMT: within 4 ulp), checked on Linux, macOS and Windows</text>', x0 + 20, y + 26, sans, th[["ink"]]),
+    sprintf('<text x="%d" y="%d" font-family="%s" font-size="14" fill="%s">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 79 PLS-SEM models · bench/phase2/REPORT.md</text>', x0 + 20, y + 48, sans, th[["muted"]]),
     "</svg>")
   c(head, body, foot)
 }

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="734" viewBox="0 0 960 734" role="img" aria-labelledby="t d">
 <title id="t">Arwad, Phase 2 results</title>
-<desc id="d">Times faster than R: 43.7× vs the lm() loop most researchers write; 7.4× vs the same algorithm in plain R: compilation alone; 10.8× vs the glm() loop most researchers write; 12.3× vs the same algorithm in plain R: compilation alone; 19.3× both on 4 cores, vs seminr::bootstrap_model() (its fastest of three runs); 8.8× Arwad on 1 core, vs seminr::bootstrap_model() on 4 cores (its fastest run); 15.2× 1,000 resamples on 1 core, vs the same algorithm in plain R. Results bit-identical to R and seminr.</desc>
+<desc id="d">Times faster than R: 43.7× vs the lm() loop most researchers write; 7.4× vs the same algorithm in plain R: compilation alone; 10.8× vs the glm() loop most researchers write; 12.3× vs the same algorithm in plain R: compilation alone; 19.3× both on 4 cores, vs seminr::bootstrap_model() (its fastest of three runs); 8.8× Arwad on 1 core, vs seminr::bootstrap_model() on 4 cores (its fastest run); 15.2× 1,000 resamples on 1 core, vs the same algorithm in plain R. Results bit-identical to R and seminr (HTMT within four units in the last place).</desc>
 <rect x="0.5" y="0.5" width="959" height="733" rx="14" fill="#FFFFFF" stroke="#CBD5E1"/>
 <text x="40" y="48" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" letter-spacing="2" fill="#A16207">ARWAD · R, COMPILED · PHASE 2 RESULTS</text>
 <text x="40" y="86" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28" font-weight="700" fill="#0F172A">The same answers as R, bit for bit, from native code</text>
@@ -32,6 +32,6 @@
 <text x="313" y="598" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" font-weight="700" fill="#1E3A5F">15.2×</text>
 <rect x="40" y="622" width="880" height="64" rx="8" fill="#FEFCE8"/>
 <rect x="40" y="622" width="5" height="64" rx="2" fill="#A16207"/>
-<text x="60" y="648" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A">Bit-identical to GNU R and seminr, checked on Linux, macOS and Windows in every CI run</text>
-<text x="60" y="670" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#475569">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 53 PLS-SEM models · bench/phase2/REPORT.md</text>
+<text x="60" y="648" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#0F172A">Bit-identical to GNU R and seminr (HTMT: within 4 ulp), checked on Linux, macOS and Windows</text>
+<text x="60" y="670" font-family="'Atkinson Hyperlegible', 'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#475569">201-function corpus · .lm.fit() on 55 designs · glm.fit() on 165 fits · seminr on 79 PLS-SEM models · bench/phase2/REPORT.md</text>
 </svg>

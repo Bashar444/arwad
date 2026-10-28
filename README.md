@@ -32,13 +32,13 @@
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/assets/results-dark.svg">
       <source media="(prefers-color-scheme: light)" srcset="docs/assets/results-light.svg">
-      <img alt="Phase 2 results: 43.7 times faster than an lm() loop, 10.8 times faster than a glm() loop, 19.3 times faster than seminr on the same four cores for 10,000 PLS-SEM resamples, and 7 to 15 times faster than the same algorithm in plain R; all bit-identical to GNU R and seminr." src="docs/assets/results-light.svg" width="100%">
+      <img alt="Phase 2 results: 43.7 times faster than an lm() loop, 10.8 times faster than a glm() loop, 19.3 times faster than seminr on the same four cores for 10,000 PLS-SEM resamples, and 7 to 15 times faster than the same algorithm in plain R; all bit-identical to GNU R and seminr (HTMT within four units in the last place)." src="docs/assets/results-light.svg" width="100%">
     </picture>
   </a>
 </p>
 
 > [!NOTE]
-> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 under way: engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop, `aw_boot_glm()` a logistic regression 10.8× faster than a `glm()` loop, and `aw_boot_pls()` a PLS-SEM model 19.3× faster than `seminr::bootstrap_model()` on the same four cores (10,000 resamples: 12.5 s instead of 241 s), all with bit-identical results ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
+> **Status:** Phase 1 complete (exit criteria met 27 Oct 2026) · Phase 2 under way: engine `aw_boot_ols()` bootstraps a regression 43.7× faster than an `lm()` loop, `aw_boot_glm()` a logistic regression 10.8× faster than a `glm()` loop, and `aw_boot_pls()` a PLS-SEM model 19.3× faster than `seminr::bootstrap_model()` on the same four cores (10,000 resamples: 12.5 s instead of 241 s; with formative (Mode B) constructs, the Primer's extended corporate reputation model 14.4× faster), all with bit-identical results (for PLS-SEM, HTMT within four units in the last place) ([bench/phase2/REPORT.md](bench/phase2/REPORT.md)) · the `arwad` R package compiles loop-heavy R functions through Goose ([bench/phase1/REPORT.md](bench/phase1/REPORT.md)): **11–33× faster** than R's byte code on loops on one laptop (11–40× across three runs), results **bit-identical** to GNU R across a 201-function corpus on Linux, macOS and Windows; about 1 s to build each new signature, and 4.5 µs of dispatch per call · Phase 0: [bench/phase0/REPORT.md](bench/phase0/REPORT.md) · MIT licence
 >
 > **Project lead:** Dr. Bashar Al Agha · [ORCID 0009-0004-5178-2345](https://orcid.org/0009-0004-5178-2345)
 

@@ -39,7 +39,7 @@ same_algorithm_in_r <- compiler::cmpfun(function(model, B, seed) {
     set.seed(seed + b)
     idx[, b] <- sample.int(nrow(s$X), replace = TRUE)
   }
-  arwad:::aw_pls_kernel(s$X, s$blk, s$pre, s$maxIt, s$crit, idx)
+  arwad:::aw_pls_call(arwad:::aw_pls_kernel, s, idx)
 })
 seminr_boot <- function(nc, nb = B) suppressMessages(bootstrap_model(model, nboot = nb, cores = nc, seed = seed))
 
@@ -51,6 +51,8 @@ same <- vapply(exact, function(f) identical(first[[f]], ref[[f]], num.eq = FALSE
 ok <- !is.na(ref$boot_HTMT)
 htmt_rel <- max(abs(first$boot_HTMT[ok] - ref$boot_HTMT[ok]) / ref$boot_HTMT[ok])
 htmt_exact <- mean(first$boot_HTMT[ok] == ref$boot_HTMT[ok])
+# HTMT distances in units in the last place (the spacing of doubles at seminr's value).
+htmt_ulps <- table(abs(first$boot_HTMT[ok] - ref$boot_HTMT[ok]) / 2^(floor(log2(ref$boot_HTMT[ok])) - 52))
 
 two <- aw_boot_pls(model, nboot = B, seed = seed, cores = cores)
 same <- c(same, all_cores = all(vapply(exact, function(f) identical(two[[f]], first[[f]], num.eq = FALSE), NA)))
@@ -87,8 +89,9 @@ res <- rbind(res, data.frame(contender = c("arwad", "arwad_all_cores", "seminr_a
 print(res, row.names = FALSE)
 cat(sprintf(paste0("\nECSI model: 7 constructs, 24 indicators, n = 250; cores = %d (seminr's default and arwad_all_cores); first call (build) %.2f s\n",
                    "identical to seminr (paths, loadings, weights, total effects): %s; at 10,000 resamples: %s\n",
-                   "HTMT: %.1f%% of values identical, largest relative difference %.2e\n"),
-            cores, first_s, paste(names(same), same, collapse = ", "), same10, 100 * htmt_exact, htmt_rel))
+                   "HTMT: %.1f%% of values identical, largest relative difference %.2e; by units in the last place: %s\n"),
+            cores, first_s, paste(names(same), same, collapse = ", "), same10, 100 * htmt_exact, htmt_rel,
+            paste(names(htmt_ulps), htmt_ulps, sep = ": ", collapse = ", ")))
 cat(R.version.string, "| seminr", as.character(packageVersion("seminr")), "| Goose", aw_toolchain()$version, "|",
     utils::sessionInfo()$running, "\n")
 write.csv(res, file.path("bench", "phase2", "pls_boot_timing.csv"), row.names = FALSE)
