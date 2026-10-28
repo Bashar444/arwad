@@ -1,3 +1,34 @@
+# arwad 0.0.0.9013
+
+* `cov(m[, j], k[, i])` and `cor(m[, j], k[, i])` of matrix columns read the
+  columns in place and keep each column's mean (and standard deviation) until
+  the matrix is written again, so repeated calls skip repeated work; values
+  stay R's, bit for bit. The PLS-SEM engine uses it: 1,000 resamples of the
+  ECSI model in 2.06 s instead of 2.86 s on the benchmark laptop, results
+  unchanged.
+* The PLS-SEM kernel builds each regression's transposed design once.
+
+# arwad 0.0.0.9012
+
+* `aw_boot_pls()` is 1.8 times faster (loadings and HTMT from one covariance
+  and one correlation matrix, compiled matrix forms of `cov()` and `cor()`),
+  and `cores =` runs resamples in parallel processes with identical results.
+
+# arwad 0.0.0.9011
+
+* `m[, j] <- v` and `m[i, ] <- v` compile. A function or signature that runs
+  in GNU R instead of native code now says so once, with the reason
+  (`options(arwad.quiet = TRUE)` turns this off).
+
+# arwad 0.0.0.9010
+
+* Third Phase 2 engine: `aw_boot_pls()`, a compiled drop-in for
+  `seminr::bootstrap_model()` (Mode A composites, path weighting scheme).
+  Path coefficients, total effects, loadings and weights are bit-identical to
+  seminr on 54 models; HTMT agrees to within two units in the last place.
+* `colMeans()`, `cov()` and `cor()` compile, matched to GNU R bit for bit; on
+  64-bit ARM, `cov()` and `cor()` call R's own routine.
+
 # arwad 0.0.0.9009
 
 * Second Phase 2 engine: `aw_glm_fit()` and `aw_boot_glm()`, iteratively

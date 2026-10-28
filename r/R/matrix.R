@@ -83,6 +83,7 @@ cx_mat_write <- function(cx, nm, tgt, v, e) {
     i <- cx_mat_index(cx, aw_gen(cx, tgt[[3L]]), var$nr, e)
     j <- cx_mat_index(cx, aw_gen(cx, tgt[[4L]]), var$nc, e)
     cx_emit(cx, sprintf("%s[(%s - 1) * %s + %s - 1] = %s;", var$g, j, var$nr, i, cv$g))
+    cx_memo_touch(cx, nm)
     return(v)
   }
   if (v$kind == "s") {
@@ -111,6 +112,7 @@ cx_mat_write <- function(cx, nm, tgt, v, e) {
                         cx_bail(cx, "a replacement R rejects for a row or column (empty, too long, or not dividing it)", e)))
     cx_emit(cx, sprintf("for %s in 0..%s { %s[%s] = %s[%s %% %s.len]; }", k, ext, var$g, pos, src, k, src))
   }
+  cx_memo_touch(cx, nm)
   v
 }
 

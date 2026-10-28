@@ -158,7 +158,90 @@ cx_assign <- function(cx, nm, v, e) {
     cx_emit(cx, sprintf("%s.clear();", var$g))
     cx_emit(cx, sprintf("%s.append(%s);", var$g, v$g))
   }
+  cx_memo_touch(cx, nm)
   var
+}
+
+# Column statistics kept for cov() and cor() of matrix columns. For every
+# matrix whose columns the body passes to cov() or cor() as m[, j], the
+# compiled code keeps each column's mean and standard deviation with the
+# epoch they were computed at; every write to the matrix starts a new epoch,
+# so a statistic is computed once per change of the matrix rather than at
+# every call, and always from the matrix as it is. The arithmetic is the one
+# cov() and cor() use, so the results are R's bit for bit.
+aw_memo_setup <- function(cx, body) {
+  found <- character()
+  # Indexed, not `for (a in e)`: the empty subscript of m[, j] cannot be
+  # held in a variable.
+  walk <- function(e) {
+    if (!is.call(e)) return(invisible())
+    stat <- cx_head(e) %in% c("cov", "cor")
+    for (i in seq_along(e)[-1L]) {
+      if (cx_is_empty(e[[i]])) next
+      if (stat && aw_is_col(e[[i]])) found <<- c(found, as.character(e[[i]][[2L]]))
+      walk(e[[i]])
+    }
+  }
+  walk(body)
+  memo <- list()
+  for (i in seq_along(unique(found))) {
+    nm <- unique(found)[i]
+    m <- list(ep = paste0("mep", i), st = paste0("mst", i), mu = paste0("mmu", i), sst = paste0("msst", i),
+              sd = paste0("msd", i))
+    cx$decls <- c(cx$decls, sprintf("var %s: f64 = 1.0;", m$ep),
+                  sprintf("var %s: f64[>..] = [];", c(m$st, m$mu, m$sst, m$sd)))
+    memo[[nm]] <- m
+  }
+  memo
+}
+
+# m[, j] with m a name and j free of assignments.
+aw_is_col <- function(a) {
+  is.call(a) && identical(a[[1L]], as.name("[")) && length(a) == 4L && is.symbol(a[[2L]]) &&
+    cx_is_empty(a[[3L]]) && !cx_is_empty(a[[4L]]) && !any(c("<-", "=", "<<-") %in% all.names(a[[4L]]))
+}
+
+# Whether `a` is a column of a double matrix with kept statistics.
+cx_memo_col <- function(cx, a) {
+  if (!aw_is_col(a)) return(FALSE)
+  nm <- as.character(a[[2L]])
+  var <- get0(nm, envir = cx$vars, inherits = FALSE)
+  !is.null(cx$memo[[nm]]) && is.list(var) && identical(var$kind, "m") && identical(var$type, "dbl")
+}
+
+# A write to `nm` starts a new epoch for its kept statistics.
+cx_memo_touch <- function(cx, nm) {
+  m <- cx$memo[[nm]]
+  if (!is.null(m)) cx_emit(cx, sprintf("%s = %s + 1.0;", m$ep, m$ep))
+}
+
+# cov(m[, j], k[, i]) and cor(...) for two columns with kept statistics: the
+# columns are read in place, the means (and standard deviations) come from
+# the kept values, computed first where the epoch has moved on.
+cx_cov2_cols <- function(cx, fn, ax, ay, e) {
+  iscor <- fn == "cor"
+  side <- function(a) {
+    nm <- as.character(a[[2L]])
+    var <- get(nm, envir = cx$vars, inherits = FALSE)
+    m <- cx$memo[[nm]]
+    j <- cx_mat_index(cx, aw_gen(cx, a[[4L]]), var$nc, e)
+    cx_emit(cx, sprintf("if %s.len < %s { %s }", m$st, var$nc,
+                        paste(sprintf("%s.resize(%s, 0.0);", c(m$st, m$mu, m$sst, m$sd), var$nc), collapse = " ")))
+    cx_emit(cx, sprintf("if %s[%s - 1] != %s { %s[%s - 1] = aw_colmean(%s, %s, %s); %s[%s - 1] = %s; }",
+                        m$st, j, m$ep, m$mu, j, var$g, var$nr, j, m$st, j, m$ep))
+    mean <- sprintf("%s[%s - 1]", m$mu, j)
+    if (iscor) cx_emit(cx, sprintf("if %s[%s - 1] != %s { %s[%s - 1] = aw_colsd(%s, %s, %s, %s); %s[%s - 1] = %s; }",
+                                   m$sst, j, m$ep, m$sd, j, var$g, var$nr, j, mean, m$sst, j, m$ep))
+    list(g = var$g, nr = var$nr, j = j, mean = mean, sd = if (iscor) sprintf("%s[%s - 1]", m$sd, j) else "0.0")
+  }
+  x <- side(ax)
+  y <- side(ay)
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("let %s: f64 = aw_cov2col(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %d);", t, x$g, x$nr, x$j, x$mean,
+                      x$sd, y$g, y$nr, y$j, y$mean, y$sd, as.integer(iscor)))
+  cx_emit(cx, sprintf("if aw_isnan(%s) { %s }", t,
+                      cx_bail(cx, sprintf("%s() of NA, unequal lengths, fewer than two values or a zero standard deviation", fn), e)))
+  aw_val(t, "dbl")
 }
 
 # numeric(n), integer(n), logical(n): into a variable, or into a fresh array.
@@ -1005,6 +1088,7 @@ aw_gen <- function(cx, e, want = TRUE) {
     "colMeans" = cx_colmeans(cx, aw_gen(cx, a[[1L]]), e),
     "cov" = , "cor" = {
       m <- aw_match_args(a, c("x", "y"))
+      if (cx_memo_col(cx, m$x) && cx_memo_col(cx, m$y)) return(cx_cov2_cols(cx, nm, m$x, m$y, e))
       cx_cov2(cx, nm, aw_gen(cx, m$x), aw_gen(cx, m$y), e)
     },
     aw_unsupported(sprintf("internal: no code generation for `%s`", nm), e)
@@ -1034,6 +1118,10 @@ aw_rt_externs <- c(
   "extern fn aw_colmeans(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
   "extern fn aw_cov2(x: const f64[:], y: const f64[:], cor: i32) -> f64;",
   "extern fn aw_covmat(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, cor: i32, z: f64[:]) -> i32;",
+  "extern fn aw_colmean(x: const f64[:], nr: i64, j: i64) -> f64;",
+  "extern fn aw_colsd(x: const f64[:], nr: i64, j: i64, m: f64) -> f64;",
+  paste("extern fn aw_cov2col(x: const f64[:], nx: i64, jx: i64, mx: f64, sx: f64,",
+        "y: const f64[:], ny: i64, jy: i64, my: f64, sy: f64, cor: i32) -> f64;"),
   "extern fn aw_imean(x: const i32[:], na: f64) -> f64;",
   "extern fn aw_rextreme(x: const f64[:], want_max: i32) -> f64;",
   "extern fn aw_pow(x: f64, y: f64) -> f64;",
@@ -1088,6 +1176,7 @@ aw_codegen <- function(info, f, types, label) {
       }
     }
   }
+  cx$memo <- aw_memo_setup(cx, body(f))
   aw_tail(cx, body(f))
   params <- c(params, "na_real: f64", "r_nan: f64", "r_inf: f64")
   sig_txt <- if (length(sig)) paste(sig, collapse = ", ") else "no arguments"

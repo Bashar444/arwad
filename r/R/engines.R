@@ -115,8 +115,12 @@ aw_pls_kernel <- function(X, blk, pre, maxIt, crit, idx) {
         }
         if (na > 0L) {
           Yp <- matrix(0, n, na)
-          for (i in seq_len(J)) if (pre[i, j] > 0) for (t in seq_len(n)) Yp[t, pre[i, j]] <- Y[t, i]
-          bj <- drop(solve(t(Yp) %*% Yp, t(Yp) %*% Y[, j]))
+          for (i in seq_len(J)) {
+            q <- pre[i, j]
+            if (q > 0) for (t in seq_len(n)) Yp[t, q] <- Y[t, i]
+          }
+          Ypt <- t(Yp)
+          bj <- drop(solve(Ypt %*% Yp, Ypt %*% Y[, j]))
           for (i in seq_len(J)) if (pre[i, j] > 0) E[i, j] <- bj[pre[i, j]]
         }
       }
@@ -149,8 +153,12 @@ aw_pls_kernel <- function(X, blk, pre, maxIt, crit, idx) {
       }
       if (na > 0L) {
         Yp <- matrix(0, n, na)
-        for (i in seq_len(J)) if (pre[i, j] > 0) for (t in seq_len(n)) Yp[t, pre[i, j]] <- Y[t, i]
-        bj <- drop(solve(t(Yp) %*% Yp, t(Yp) %*% Y[, j]))
+        for (i in seq_len(J)) {
+          q <- pre[i, j]
+          if (q > 0) for (t in seq_len(n)) Yp[t, q] <- Y[t, i]
+        }
+        Ypt <- t(Yp)
+        bj <- drop(solve(Ypt %*% Yp, Ypt %*% Y[, j]))
         for (i in seq_len(J)) if (pre[i, j] > 0) Bm[i, j] <- bj[pre[i, j]]
       }
     }

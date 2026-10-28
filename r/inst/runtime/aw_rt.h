@@ -239,6 +239,56 @@ static int aw_const_col(const double *x, int64_t n, int64_t nc)
     return 0;
 }
 
+/* cov() and cor() of single matrix columns, x[, j], from statistics the
+ * compiled code keeps per column until the matrix is written again (the
+ * mean, and for cor() the standard deviation, are then computed once rather
+ * than at every call). aw_colmean() is the mean aw_cov2() uses, NaN when the
+ * column has a non-finite value (R gives NA there, so the caller bails);
+ * aw_colsd() the standard deviation aw_cov2() uses; aw_cov2col() the value
+ * aw_cov2() returns for the two columns, NaN where it returns NaN. A vector
+ * is a matrix with one column. On 64-bit ARM the value comes from R's own
+ * routine, as aw_cov2() does there. */
+static double aw_colmean(sl_f64 x, int64_t nr, int64_t j)
+{
+    const double *c = x.data + (j - 1) * nr;
+    for (int64_t i = 0; i < nr; i++)
+        if (!isfinite(c[i])) return NAN;
+    return aw_rmean_p(c, nr);
+}
+
+static double aw_colsd(sl_f64 x, int64_t nr, int64_t j, double m)
+{
+    const double *c = x.data + (j - 1) * nr;
+    long double mc = m, ss = 0.0;
+    for (int64_t k = 0; k < nr; k++) ss += (c[k] - mc) * (c[k] - mc);
+    return (double) sqrtl(ss / (nr - 1));
+}
+
+static double aw_cov2col(sl_f64 x, int64_t nx, int64_t jx, double mx, double sx,
+                         sl_f64 y, int64_t ny, int64_t jy, double my, double sy, int32_t cor)
+{
+    if (nx != ny || nx < 2 || isnan(mx) || isnan(my)) return NAN;
+    const double *a = x.data + (jx - 1) * nx, *b = y.data + (jy - 1) * ny;
+#ifdef AW_R_COV
+    if (cor && (aw_const_col(a, nx, 1) || aw_const_col(b, ny, 1))) return NAN;
+    sl_f64 xs = x, ys = y;
+    xs.data = (double *) a;
+    xs.len = nx;
+    ys.data = (double *) b;
+    ys.len = ny;
+    return aw_cov2_r(xs, ys, cor);
+#endif
+    long double ax = mx, ay = my, s = 0.0;
+    for (int64_t k = 0; k < nx; k++) s += (a[k] - ax) * (b[k] - ay);
+    double c = (double) (s / (nx - 1));
+    if (!cor) return c;
+    if (sx == 0.0 || sy == 0.0) return NAN;
+    double r = c / (sx * sy);
+    if (r > 1.0) r = 1.0;
+    if (r < -1.0) r = -1.0;
+    return r;
+}
+
 /* cov(X, Y) and cor(X, Y) of two matrices (a vector counts as one column),
  * as GNU R computes them with two arguments: entry (i, j) is exactly the
  * value of cov() or cor() of column i of X and column j of Y, the rule
@@ -265,6 +315,10 @@ static int32_t aw_covmat(sl_f64 x, int64_t n, int64_t ncx, sl_f64 y, int64_t ny,
     for (int64_t j = 0; j < ncy; j++) my[j] = same ? mx[j] : aw_rmean_p(y.data + j * n, n);
     if (cor) {
         for (int64_t i = 0; i < ncx + ncy; i++) {
+            if (same && i >= ncx) {
+                sx[i] = sx[i - ncx];
+                continue;
+            }
             const double *c = i < ncx ? x.data + i * n : y.data + (i - ncx) * n;
             long double mc = i < ncx ? mx[i] : my[i - ncx], ss = 0.0;
             for (int64_t k = 0; k < n; k++) ss += (c[k] - mc) * (c[k] - mc);

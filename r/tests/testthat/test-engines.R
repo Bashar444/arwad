@@ -238,6 +238,42 @@ test_that("colMeans(), cov() and cor() compile and match R bit for bit", {
   expect_identical(suppressWarnings(fr(c(1, 1, 1), c(2, 5, 1))), suppressWarnings(stats::cor(c(1, 1, 1), c(2, 5, 1))))
 })
 
+test_that("cov() and cor() of matrix columns keep column statistics only while the matrix is unchanged", {
+  skip_if_no_toolchain()
+  f <- function(A, B, rounds) {
+    p <- ncol(A)
+    q <- ncol(B)
+    out <- matrix(0, rounds * p * q, 2L)
+    r <- 0L
+    for (s in seq_len(rounds)) {
+      for (k in seq_len(p)) for (j in seq_len(q)) {
+        r <- r + 1L
+        out[r, 1L] <- cov(A[, k], B[, j])
+        out[r, 2L] <- cor(B[, j], A[, k])
+      }
+      # One element, one column, then the whole matrix change between rounds.
+      A[s, 1L] <- A[s, 1L] * 3 + 1
+      B[, q] <- B[, q] + s
+      if (s %% 2L == 0L) A <- A * 2 - 1
+    }
+    out
+  }
+  g <- aw_compile(f)
+  set.seed(11)
+  for (t in seq_len(40L)) {
+    n <- sample(c(3L, 9L, 50L, 250L), 1L)
+    A <- matrix(stats::rnorm(n * 3L, 0, 10^stats::runif(1L, -2, 2)), n, 3L) + (if (t %% 3L == 0L) 1e8 else 0)
+    B <- cbind(A[, 1L] * 0.5 + stats::rnorm(n), stats::rnorm(n))
+    expect_same_as_r(f, g, list(A, B, 3L), "column statistics")
+  }
+  st <- aw_stats(g)
+  expect_gt(sum(st$calls), 0L)
+  expect_identical(sum(st$bailouts), 0L)
+  # A constant column: R warns and gives NA, so that call goes to R.
+  A <- cbind(1, stats::rnorm(6))
+  expect_identical(suppressWarnings(g(A, A, 1L)), suppressWarnings(f(A, A, 1L)))
+})
+
 aw_pls_fit_models <- function() {
   lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
 }
