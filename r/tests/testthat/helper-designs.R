@@ -58,14 +58,20 @@ aw_with_warnings <- function(expr) {
 # (ECSI mobile phone data, the corporate reputation data of Hair et al.'s
 # Primer, the influencer data) and seeded synthetic models with 2 to 7
 # constructs, 1 to 6 indicators each, n from 40 to 800, Likert-type and
-# rescaled data, shuffled declaration and path orders, Mode A composites (and
-# one reflective model, which seminr estimates by PLSc and aw_boot_pls() hands
-# back to seminr), and seminr's default maxIt (300) or the 3,000 the
-# Primer recommends.
+# rescaled data, shuffled declaration and path orders, Mode A composites,
+# models with formative (Mode B) constructs, including the Primer's extended
+# corporate reputation model and a Mode B version of every second synthetic
+# model (and one reflective model, which seminr estimates by PLSc and
+# aw_boot_pls() hands back to seminr), and seminr's default maxIt (300) or
+# the 3,000 the Primer recommends.
 aw_pls_models <- function() {
   if (!requireNamespace("seminr", quietly = TRUE)) return(list())
-  blk <- function(nm, items, refl) if (refl) seminr::reflective(nm, items) else seminr::composite(nm, items)
-  mm <- function(blocks, refl = rep(FALSE, length(blocks))) do.call(seminr::constructs, unname(Map(blk, names(blocks), blocks, refl)))
+  blk <- function(nm, items, refl, form) {
+    if (refl) seminr::reflective(nm, items) else if (form) seminr::composite(nm, items, weights = seminr::mode_B) else seminr::composite(nm, items)
+  }
+  mm <- function(blocks, refl = rep(FALSE, length(blocks)), form = rep(FALSE, length(blocks))) {
+    do.call(seminr::constructs, unname(Map(blk, names(blocks), blocks, refl, form)))
+  }
   sm <- function(...) {
     e <- rbind(...)
     do.call(seminr::relationships, lapply(seq_len(nrow(e)), function(r) seminr::paths(from = e[r, 1L], to = e[r, 2L])))
@@ -95,6 +101,13 @@ aw_pls_models <- function() {
     mobi_ecsi_full = list(data = mobi, mm = mm(full), sm = full_sm, maxIt = 300L),
     corp_rep_simple = list(data = seminr::corp_rep_data, mm = mm(cr), sm = cr_sm, maxIt = 3000L),
     corp_rep_extended = list(data = seminr::corp_rep_data, mm = mm(crx), sm = crx_sm, maxIt = 300L),
+    # The Primer's extended corporate reputation model: QUAL, PERF, CSOR and
+    # ATTR are formative (Mode B).
+    corp_rep_extended_modeB = list(data = seminr::corp_rep_data, mm = mm(crx, form = names(crx) %in% c("QUAL", "PERF", "CSOR", "ATTR")),
+                                   sm = crx_sm, maxIt = 3000L),
+    mobi_ecsi_image_modeB = list(data = mobi, mm = mm(ecsi, form = names(ecsi) == "Image"), sm = ecsi_sm, maxIt = 300L),
+    mobi_ecsi_full_modeB = list(data = mobi, mm = mm(full, form = names(full) %in% c("Image", "Quality", "Loyalty")), sm = full_sm,
+                                maxIt = 300L),
     corp_rep2_simple = list(data = seminr::corp_rep_data2, mm = mm(cr), sm = cr_sm, maxIt = 300L),
     influencer = list(data = seminr::influencer_data, mm = mm(inf), sm = inf_sm, maxIt = 300L))
   seed <- get0(".Random.seed", envir = globalenv(), inherits = FALSE)
@@ -136,6 +149,14 @@ aw_pls_models <- function() {
     out[[sprintf("sim%02d_J%d_n%d", g, J, n)]] <- list(data = as.data.frame(cols), mm = mm(blocks[ord]),
                                                       sm = do.call(sm, lapply(seq_len(nrow(e)), function(r) e[r, ])),
                                                       maxIt = if (g %% 5L == 0L) 3000L else 300L)
+    # Every second model again with its odd-numbered multi-indicator
+    # constructs formative (Mode B); chosen without drawing random numbers,
+    # so the models above stay as they were.
+    form <- k > 1L & seq_len(J) %% 2L == 1L
+    if (g %% 2L == 0L && any(form)) {
+      out[[sprintf("sim%02d_J%d_n%d_modeB", g, J, n)]] <- list(data = as.data.frame(cols), mm = mm(blocks[ord], form = form[ord]),
+                                                              sm = out[[length(out)]]$sm, maxIt = out[[length(out)]]$maxIt)
+    }
   }
   if (is.null(seed)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", seed, envir = globalenv())
   out

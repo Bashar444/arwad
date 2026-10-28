@@ -1,3 +1,19 @@
+# arwad 0.0.0.9014
+
+* `aw_boot_pls()` runs models with formative constructs
+  (`composite(..., weights = mode_B)`) as native code, including the Primer's
+  extended corporate reputation model; results are bit-identical to seminr
+  (HTMT within four units in the last place, see below). Only `reflective()`
+  (PLSc) models, other weighting schemes, interactions, higher-order
+  constructs and missing data still go to seminr.
+* `cov(X)` and `cor(X)` of one matrix compile, matched to GNU R bit for bit
+  (R's `cor(X)` rounds differently from `cor(X, X)`).
+* Correction: HTMT agrees with seminr to within four units in the last
+  place, not two as stated since 0.0.0.9010. Measured over 1,000 resamples:
+  the ECSI model has values up to 3 units apart, the Primer's extended
+  corporate reputation model one value 4 units apart; about three in four
+  values are identical. The test now checks the distance in units.
+
 # arwad 0.0.0.9013
 
 * `cov(m[, j], k[, i])` and `cor(m[, j], k[, i])` of matrix columns read the

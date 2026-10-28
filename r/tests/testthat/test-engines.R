@@ -238,6 +238,32 @@ test_that("colMeans(), cov() and cor() compile and match R bit for bit", {
   expect_identical(suppressWarnings(fr(c(1, 1, 1), c(2, 5, 1))), suppressWarnings(stats::cor(c(1, 1, 1), c(2, 5, 1))))
 })
 
+test_that("cov(X) and cor(X) of one matrix compile and match R bit for bit", {
+  skip_if_no_toolchain()
+  # cor(X) rounds differently from cor(X, X), so it is compared with itself.
+  fc1 <- aw_compile(function(X) cov(X))
+  fr1 <- aw_compile(function(X) cor(X))
+  set.seed(8)
+  for (t in seq_len(150L)) {
+    n <- sample(c(3L, 10L, 50L, 300L), 1L)
+    k <- sample(1:8, 1L)
+    X <- matrix(stats::rnorm(n * k), n, k) %*% matrix(stats::runif(k * k, -1, 1), k) * 10^stats::runif(1L, -3, 3) +
+      (if (t %% 3L == 0L) 1e3 else 0)
+    if (t %% 4L == 0L) X <- round(2 * X)
+    if (t %% 5L == 0L && k > 1L) X[, 2L] <- 1 - 3 * X[, 1L]
+    # A constant column (R warns) is the case left to R, checked below.
+    if (any(apply(X, 2L, function(v) all(v == v[1L])))) next
+    expect_true(identical(fc1(X), stats::cov(X), num.eq = FALSE), label = paste("cov(X)", t))
+    expect_true(identical(fr1(X), stats::cor(X), num.eq = FALSE), label = paste("cor(X)", t))
+  }
+  utils::capture.output(info <- aw_explain(fr1))
+  expect_identical(sum(info$bailouts), 0L)
+  Z <- cbind(1, stats::rnorm(6))
+  expect_identical(suppressWarnings(fr1(Z)), suppressWarnings(stats::cor(Z)))
+  expect_identical(fc1(cbind(c(1, NA, 3), 1:3)), stats::cov(cbind(c(1, NA, 3), 1:3)))
+  expect_error(suppressMessages(aw_compile(function(x) cor(x))(1:5 + 0.5)), "matrix")
+})
+
 test_that("cov() and cor() of matrix columns keep column statistics only while the matrix is unchanged", {
   skip_if_no_toolchain()
   f <- function(A, B, rounds) {
@@ -283,14 +309,16 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
   skip_if_not_installed("seminr")
   fits <- aw_pls_fit_models()
   native <- 0L
+  formative <- 0L
   for (nm in names(fits)) {
     m <- fits[[nm]]
     s <- arwad:::aw_pls_spec(m)
     if (is.null(s)) {
-      expect_true(any(m$mmMatrix[, "type"] != "A"), label = paste(nm, "is outside the native subset only for its PLSc constructs"))
+      expect_false(all(m$mmMatrix[, "type"] %in% c("A", "B")), label = paste(nm, "is outside the native subset only for its PLSc constructs"))
       next
     }
     native <- native + 1L
+    formative <- formative + any(s$mode == 2L)
     o <- arwad:::aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
     p <- length(s$items)
     pJ <- p * length(s$cons)
@@ -304,7 +332,8 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
     expect_identical(as.integer(o[1L, p + pJ + 3L * JJ + 1L]), m$iterations, label = paste(nm, "iterations"))
     expect_true(identical(o[1L, p + pJ + 3L * JJ + 2L], m$weightDiff, num.eq = FALSE), label = paste(nm, "weight change"))
   }
-  expect_gte(native, 50L)
+  expect_gte(native, 70L)
+  expect_gte(formative, 20L)
 })
 
 test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models", {
@@ -321,9 +350,12 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
     expect_identical(got$native, !is.null(arwad:::aw_pls_spec(fits[[nm]])), label = paste(nm, "native"))
     for (f in exact) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(nm, f))
     expect_identical(is.na(got$boot_HTMT), is.na(want$boot_HTMT), label = paste(nm, "HTMT pattern"))
+    # HTMT: the distance in units in the last place (the spacing of doubles
+    # at seminr's value), which the documentation states as at most four.
     ok <- !is.na(want$boot_HTMT)
-    expect_lte(max(0, abs(got$boot_HTMT[ok] - want$boot_HTMT[ok]) / abs(want$boot_HTMT[ok])), 4 * .Machine$double.eps,
-               label = paste(nm, "HTMT within a few units in the last place"))
+    w <- want$boot_HTMT[ok]
+    ulp <- pmax(2^(floor(log2(abs(w))) - 52), .Machine$double.xmin)
+    expect_lte(max(0, abs(got$boot_HTMT[ok] - w) / ulp), 4, label = paste(nm, "HTMT within four units in the last place"))
   }
   # The comparisons above are with native code, not with GNU R running the
   # kernel after a static fallback or a bailout.
@@ -356,7 +388,7 @@ test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() doe
   for (f in c("bootstrapped_paths", "bootstrapped_weights", "bootstrapped_loadings", "bootstrapped_total_paths"))
     expect_identical(sg[[f]], sw[[f]], label = paste("summary()", f))
   mb <- suppressMessages(seminr::estimate_pls(seminr::mobi, seminr::constructs(
-    seminr::composite("Image", seminr::multi_items("IMAG", 1:5), weights = seminr::mode_B),
+    seminr::reflective("Image", seminr::multi_items("IMAG", 1:5)),
     seminr::composite("Value", seminr::multi_items("PERV", 1:2))), seminr::relationships(seminr::paths(from = "Image", to = "Value"))))
   fb <- suppressMessages(aw_boot_pls(mb, nboot = 3L, seed = 1L))
   expect_false(fb$native)

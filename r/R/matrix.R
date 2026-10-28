@@ -366,6 +366,19 @@ cx_covmat <- function(cx, fn, x, y, e) {
   aw_val(t, "dbl", "m", sx[2], sy[2])
 }
 
+# cov(X) and cor(X) of one matrix: the symmetric matrix R gives (cor(X)
+# rounds differently from cor(X, X)). One vector is an error in R.
+cx_cov1 <- function(cx, fn, x, e) {
+  if (x$kind != "m") aw_unsupported(sprintf("%s() of one value that is not a matrix (R errors)", fn), e)
+  xd <- cx_dbl_data(cx, x, e)
+  t <- cx_tmp(cx)
+  cx_emit(cx, sprintf("var %s: f64[>..] = [];", t))
+  cx_emit(cx, sprintf("%s.resize(%s * %s, 0.0);", t, x$nc, x$nc))
+  cx_emit(cx, sprintf("if aw_covmat1(%s, %s, %s, %d, %s) != 0 { %s }", xd, x$nr, x$nc, as.integer(fn == "cor"), t,
+                      cx_bail(cx, sprintf("%s() of NA, fewer than two rows or a zero standard deviation", fn), e)))
+  aw_val(t, "dbl", "m", x$nc, x$nc)
+}
+
 # drop(): a matrix with one row or one column becomes a vector, as R drops
 # extents of 1; any other matrix stays a matrix in R and is left to GNU R.
 cx_drop <- function(cx, v, e) {

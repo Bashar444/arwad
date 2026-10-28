@@ -27,7 +27,7 @@ aw_arity <- list(
   "!" = 1L, "&" = 2L, "|" = 2L, "&&" = 2L, "||" = 2L,
   "[" = 2:3, "[[" = 2:3, ":" = 2L, "seq_len" = 1L, "seq_along" = 1L,
   "matrix" = 1:3, "nrow" = 1L, "ncol" = 1L, "dim" = 1L, "t" = 1L,
-  "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2, "colMeans" = 1L, "cov" = 2L, "cor" = 2L,
+  "%*%" = 2L, "crossprod" = 1:2, "solve" = 1:2, "colMeans" = 1L, "cov" = 1:2, "cor" = 1:2,
   "floor" = 1L, "ceiling" = 1L, "runif" = 1:3, "rnorm" = 1:3,
   "sample" = 1:3, "sample.int" = 1:3, "$" = 2L, ".lm.fit" = 2:3, "drop" = 1L,
   "length" = 1L, "numeric" = 0:1, "integer" = 0:1, "logical" = 0:1,

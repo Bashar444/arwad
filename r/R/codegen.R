@@ -1088,6 +1088,7 @@ aw_gen <- function(cx, e, want = TRUE) {
     "colMeans" = cx_colmeans(cx, aw_gen(cx, a[[1L]]), e),
     "cov" = , "cor" = {
       m <- aw_match_args(a, c("x", "y"))
+      if (is.null(m$y)) return(cx_cov1(cx, nm, aw_gen(cx, m$x), e))
       if (cx_memo_col(cx, m$x) && cx_memo_col(cx, m$y)) return(cx_cov2_cols(cx, nm, m$x, m$y, e))
       cx_cov2(cx, nm, aw_gen(cx, m$x), aw_gen(cx, m$y), e)
     },
@@ -1118,6 +1119,7 @@ aw_rt_externs <- c(
   "extern fn aw_colmeans(x: const f64[:], nr: i64, nc: i64, z: f64[:]) -> i32;",
   "extern fn aw_cov2(x: const f64[:], y: const f64[:], cor: i32) -> f64;",
   "extern fn aw_covmat(x: const f64[:], nrx: i64, ncx: i64, y: const f64[:], nry: i64, ncy: i64, cor: i32, z: f64[:]) -> i32;",
+  "extern fn aw_covmat1(x: const f64[:], nr: i64, nc: i64, cor: i32, z: f64[:]) -> i32;",
   "extern fn aw_colmean(x: const f64[:], nr: i64, j: i64) -> f64;",
   "extern fn aw_colsd(x: const f64[:], nr: i64, j: i64, m: f64) -> f64;",
   paste("extern fn aw_cov2col(x: const f64[:], nx: i64, jx: i64, mx: f64, sx: f64,",

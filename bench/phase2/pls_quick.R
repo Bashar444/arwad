@@ -33,7 +33,7 @@ for (b in seq_len(B)) {
   set.seed(123L + b)
   idx[, b] <- sample.int(nrow(s$X), replace = TRUE)
 }
-t_r <- system.time(arwad:::aw_pls_kernel(s$X, s$blk, s$pre, s$maxIt, s$crit, idx))[["elapsed"]]
+t_r <- system.time(arwad:::aw_pls_call(arwad:::aw_pls_kernel, s, idx))[["elapsed"]]
 invisible(utils::capture.output(info <- aw_explain(arwad:::aw_pls_unit())))
 same <- all(vapply(c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths"),
                    function(f) identical(got[[f]], want[[f]], num.eq = FALSE), NA))

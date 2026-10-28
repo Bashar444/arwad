@@ -25,14 +25,16 @@ methods work on it; \code{native} is \code{FALSE} when seminr produced it.
 A compiled replacement for \code{seminr::bootstrap_model()}. It takes a model
 estimated by \code{seminr::estimate_pls()} and re-estimates it on \code{nboot} case
 resamples with the PLS path algorithm (path weighting scheme, Mode A
-weights, standardised data, the model's \code{maxIt} and \code{stopCriterion}),
-drawn exactly as \code{bootstrap_model()} draws them: resample \code{b} is
-\code{sample.int(n, replace = TRUE)} after \code{set.seed(seed + b)}. Path
-coefficients, total effects, loadings and weights are bit-identical to
-\code{bootstrap_model()}; HTMT ratios agree to within two units in the last
-place. The caller's random-number state is left as it was. Models outside
-the native subset (Mode B, other weighting schemes, interaction terms,
-higher-order constructs, missing data) are passed to
+weights for \code{composite()} constructs and Mode B weights for
+\code{composite(..., weights = mode_B)} ones, standardised data, the model's
+\code{maxIt} and \code{stopCriterion}), drawn exactly as \code{bootstrap_model()} draws
+them: resample \code{b} is \code{sample.int(n, replace = TRUE)} after
+\code{set.seed(seed + b)}. Path coefficients, total effects, loadings and
+weights are bit-identical to \code{bootstrap_model()}; HTMT ratios agree to
+within four units in the last place. The caller's random-number state is
+left as it was. Models outside the native subset (\code{reflective()}
+constructs, which seminr estimates by PLSc, other weighting schemes,
+interaction terms, higher-order constructs, missing data) are passed to
 \code{seminr::bootstrap_model()} itself.
 }
 \details{
