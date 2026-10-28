@@ -1,3 +1,31 @@
+# arwad 0.1.0.9000
+
+* `aw_boot_pls()` runs models with `reflective()` constructs as native code:
+  Mode A weights followed by consistent PLS (PLSc; Dijkstra and Henseler,
+  2015), the way seminr 2.5.0 applies it. Estimates and bootstrap arrays are
+  bit-identical to seminr on the 46 test models with reflective constructs
+  (all reflective, next to Mode A composites, next to Mode B constructs,
+  single-indicator reflective constructs); HTMT stays within four units in
+  the last place. Two seminr rules found by black-box tests are kept, so that
+  the bootstrap belongs to the estimate seminr produced: in a model with a
+  reflective construct the correction applies to every Mode A construct with
+  two or more indicators, `composite()` ones included (the published method
+  corrects only constructs modelled as common factors); and resamples for
+  which consistent PLS is undefined (a negative rho_A) are left out, with
+  `boots` counting the others and a message saying how many. Still handed to
+  seminr: the factorial and centroid schemes, interaction terms,
+  higher-order constructs and missing data.
+* Fixed: the resamples are estimated with seminr's default `maxIt` (300) and
+  `stopCriterion` (7), as `bootstrap_model()` does whatever the model was
+  estimated with. Until now `aw_boot_pls()` used the model's own settings,
+  which gave numbers different from seminr's for a model estimated with
+  another `stopCriterion`, or for a resample needing more than 300
+  iterations. The published comparisons and benchmarks met neither case
+  (their arrays were identical to seminr's).
+* With fewer than two usable resamples (for example `nboot = 1`),
+  `aw_boot_pls()` hands the model to `bootstrap_model()`, which stops, as it
+  does when called directly; before, it returned a one-resample bootstrap.
+
 # arwad 0.1.0
 
 First citable release (28 October 2026), archived on Zenodo:

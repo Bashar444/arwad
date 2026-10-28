@@ -25,19 +25,30 @@ methods work on it; \code{native} is \code{FALSE} when seminr produced it.
 A compiled replacement for \code{seminr::bootstrap_model()}. It takes a model
 estimated by \code{seminr::estimate_pls()} and re-estimates it on \code{nboot} case
 resamples with the PLS path algorithm (path weighting scheme, Mode A
-weights for \code{composite()} constructs and Mode B weights for
-\code{composite(..., weights = mode_B)} ones, standardised data, the model's
-\code{maxIt} and \code{stopCriterion}), drawn exactly as \code{bootstrap_model()} draws
-them: resample \code{b} is \code{sample.int(n, replace = TRUE)} after
-\code{set.seed(seed + b)}. Path coefficients, total effects, loadings and
-weights are bit-identical to \code{bootstrap_model()}; HTMT ratios agree to
-within four units in the last place. The caller's random-number state is
-left as it was. Models outside the native subset (\code{reflective()}
-constructs, which seminr estimates by PLSc, other weighting schemes,
-interaction terms, higher-order constructs, missing data) are passed to
+weights for \code{composite()} constructs, Mode B weights for
+\code{composite(..., weights = mode_B)} ones, and for \code{reflective()} constructs
+Mode A weights followed by consistent PLS, as seminr applies it;
+standardised data), drawn exactly as \code{bootstrap_model()} draws them:
+resample \code{b} is \code{sample.int(n, replace = TRUE)} after \code{set.seed(seed + b)}.
+Path coefficients, total effects, loadings and weights are bit-identical to
+\code{bootstrap_model()}; HTMT ratios agree to within four units in the last
+place. The caller's random-number state is left as it was. Models outside
+the native subset (other weighting schemes, interaction terms,
+higher-order constructs, missing data) are passed to
 \code{seminr::bootstrap_model()} itself.
 }
 \details{
+Two behaviours of \code{bootstrap_model()} (seminr 2.5.0) are kept, so that
+the numbers stay seminr's. Every resample is estimated with seminr's
+default \code{maxIt} (300) and \code{stopCriterion} (7), whatever the model was
+estimated with. In a model with a reflective construct, consistent PLS
+corrects the correlations of every Mode A construct with two or more
+indicators, \code{composite()} ones included, not only the reflective ones;
+resamples for which it is undefined (a negative rho_A) are left out of the
+bootstrap and \code{boots} counts the others, with a message. When fewer than
+two resamples are left, the model goes to \code{bootstrap_model()}, which then
+stops.
+
 With \code{cores} above 1 the resamples are split over that many worker
 processes (forked on Linux and macOS, a socket cluster on Windows). Each
 resample is computed on its own, so the result is the same for any number

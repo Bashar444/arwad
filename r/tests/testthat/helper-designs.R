@@ -61,9 +61,11 @@ aw_with_warnings <- function(expr) {
 # rescaled data, shuffled declaration and path orders, Mode A composites,
 # models with formative (Mode B) constructs, including the Primer's extended
 # corporate reputation model and a Mode B version of every second synthetic
-# model (and one reflective model, which seminr estimates by PLSc and
-# aw_boot_pls() hands back to seminr), and seminr's default maxIt (300) or
-# the 3,000 the Primer recommends.
+# model, models with reflective constructs, which seminr estimates by
+# consistent PLS (all reflective; reflective next to Mode A composites, which
+# seminr then corrects too; reflective next to Mode B; single-indicator
+# reflective constructs), and seminr's default maxIt (300) or the 3,000 the
+# Primer recommends.
 aw_pls_models <- function() {
   if (!requireNamespace("seminr", quietly = TRUE)) return(list())
   blk <- function(nm, items, refl, form) {
@@ -109,7 +111,17 @@ aw_pls_models <- function() {
     mobi_ecsi_full_modeB = list(data = mobi, mm = mm(full, form = names(full) %in% c("Image", "Quality", "Loyalty")), sm = full_sm,
                                 maxIt = 300L),
     corp_rep2_simple = list(data = seminr::corp_rep_data2, mm = mm(cr), sm = cr_sm, maxIt = 300L),
-    influencer = list(data = seminr::influencer_data, mm = mm(inf), sm = inf_sm, maxIt = 300L))
+    influencer = list(data = seminr::influencer_data, mm = mm(inf), sm = inf_sm, maxIt = 300L),
+    # Consistent PLS: the full ECSI model with every construct reflective
+    # (Complaints has one indicator), and with four reflective constructs next
+    # to three Mode A composites; the Primer's extended model with its
+    # formative drivers and reflective outcomes.
+    mobi_ecsi_full_reflective = list(data = mobi, mm = mm(full, rep(TRUE, 7L)), sm = full_sm, maxIt = 300L),
+    mobi_ecsi_full_mixed = list(data = mobi, mm = mm(full, names(full) %in% c("Image", "Quality", "Satisfaction", "Loyalty")),
+                                sm = full_sm, maxIt = 300L),
+    corp_rep_extended_plsc = list(data = seminr::corp_rep_data, mm = mm(crx, refl = names(crx) %in% c("COMP", "LIKE", "CUSA", "CUSL"),
+                                                                       form = names(crx) %in% c("QUAL", "PERF", "CSOR", "ATTR")),
+                                  sm = crx_sm, maxIt = 3000L))
   seed <- get0(".Random.seed", envir = globalenv(), inherits = FALSE)
   set.seed(20261028)
   for (g in seq_len(46L)) {
@@ -146,16 +158,33 @@ aw_pls_models <- function() {
     }
     ord <- sample.int(J)
     e <- cbind(paste0("C", E[, 1L]), paste0("C", E[, 2L]))[sample.int(nrow(E)), , drop = FALSE]
-    out[[sprintf("sim%02d_J%d_n%d", g, J, n)]] <- list(data = as.data.frame(cols), mm = mm(blocks[ord]),
-                                                      sm = do.call(sm, lapply(seq_len(nrow(e)), function(r) e[r, ])),
-                                                      maxIt = if (g %% 5L == 0L) 3000L else 300L)
+    base <- list(data = as.data.frame(cols), mm = mm(blocks[ord]), sm = do.call(sm, lapply(seq_len(nrow(e)), function(r) e[r, ])),
+                 maxIt = if (g %% 5L == 0L) 3000L else 300L)
+    out[[sprintf("sim%02d_J%d_n%d", g, J, n)]] <- base
     # Every second model again with its odd-numbered multi-indicator
     # constructs formative (Mode B); chosen without drawing random numbers,
     # so the models above stay as they were.
     form <- k > 1L & seq_len(J) %% 2L == 1L
     if (g %% 2L == 0L && any(form)) {
-      out[[sprintf("sim%02d_J%d_n%d_modeB", g, J, n)]] <- list(data = as.data.frame(cols), mm = mm(blocks[ord], form = form[ord]),
-                                                              sm = out[[length(out)]]$sm, maxIt = out[[length(out)]]$maxIt)
+      out[[sprintf("sim%02d_J%d_n%d_modeB", g, J, n)]] <- list(data = base$data, mm = mm(blocks[ord], form = form[ord]),
+                                                              sm = base$sm, maxIt = base$maxIt)
+    }
+    # Consistent PLS, also without drawing random numbers: every third model
+    # with all constructs reflective, the next with its odd-numbered constructs
+    # reflective and the others Mode A composites, and every fourth Mode B
+    # model with its other constructs reflective.
+    refl <- seq_len(J) %% 2L == 1L
+    if (g %% 3L == 2L) {
+      out[[sprintf("sim%02d_J%d_n%d_plsc", g, J, n)]] <- list(data = base$data, mm = mm(blocks[ord], refl = rep(TRUE, J)),
+                                                             sm = base$sm, maxIt = base$maxIt)
+    }
+    if (g %% 3L == 0L) {
+      out[[sprintf("sim%02d_J%d_n%d_plsc_mixed", g, J, n)]] <- list(data = base$data, mm = mm(blocks[ord], refl = refl[ord]),
+                                                                   sm = base$sm, maxIt = base$maxIt)
+    }
+    if (g %% 4L == 2L && any(form)) {
+      out[[sprintf("sim%02d_J%d_n%d_modeB_plsc", g, J, n)]] <- list(data = base$data, mm = mm(blocks[ord], refl = !form[ord], form = form[ord]),
+                                                                   sm = base$sm, maxIt = base$maxIt)
     }
   }
   if (is.null(seed)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", seed, envir = globalenv())
@@ -165,4 +194,21 @@ aw_pls_models <- function() {
 # The models of aw_pls_models(), estimated by seminr::estimate_pls().
 aw_pls_fit_models <- function() {
   lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
+}
+
+# For a case seminr does not bootstrap (it stops when fewer than two
+# resamples are left): aw_boot_pls() handed it to seminr and ended the same
+# way (the same error, or the model returned as it was). The tests call
+# seminr::bootstrap_model() in the test body, not in a helper: seminr sends
+# its caller's environment to its worker processes, and under
+# devtools::test() a helper's environment leads to the attached development
+# package, which seminr's workers cannot load (seminr then stops).
+expect_same_outcome <- function(got, want, label) {
+  testthat::expect_identical(class(got), class(want), label = paste(label, "outcome"))
+  if (inherits(want, "error")) {
+    testthat::expect_identical(conditionMessage(got), conditionMessage(want), label = paste(label, "error"))
+  } else {
+    testthat::expect_false(got$native, label = paste(label, "native"))
+    testthat::expect_null(got$boot_paths, label = paste(label, "not bootstrapped"))
+  }
 }

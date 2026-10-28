@@ -306,15 +306,15 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
   fits <- aw_pls_fit_models()
   native <- 0L
   formative <- 0L
+  plsc <- 0L
   for (nm in names(fits)) {
     m <- fits[[nm]]
     s <- arwad:::aw_pls_spec(m)
-    if (is.null(s)) {
-      expect_false(all(m$mmMatrix[, "type"] %in% c("A", "B")), label = paste(nm, "is outside the native subset only for its PLSc constructs"))
-      next
-    }
+    expect_false(is.null(s), label = paste(nm, "is in the native subset"))
+    if (is.null(s)) next
     native <- native + 1L
     formative <- formative + any(s$mode == 2L)
+    plsc <- plsc + any(s$mode == 3L)
     o <- arwad:::aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
     p <- length(s$items)
     pJ <- p * length(s$cons)
@@ -327,9 +327,11 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
                 label = paste(nm, "paths"))
     expect_identical(as.integer(o[1L, p + pJ + 3L * JJ + 1L]), m$iterations, label = paste(nm, "iterations"))
     expect_true(identical(o[1L, p + pJ + 3L * JJ + 2L], m$weightDiff, num.eq = FALSE), label = paste(nm, "weight change"))
+    expect_identical(o[1L, p + pJ + 3L * JJ + 3L], 0, label = paste(nm, "status"))
   }
-  expect_gte(native, 70L)
-  expect_gte(formative, 20L)
+  expect_gte(native, 120L)
+  expect_gte(formative, 30L)
+  expect_gte(plsc, 40L)
 })
 
 test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models", {
@@ -341,9 +343,16 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
              "loadings_descriptives", "weights_descriptives", "total_paths_descriptives", "boots", "seed")
   for (k in seq_along(fits)) {
     nm <- names(fits)[k]
-    want <- suppressMessages(seminr::bootstrap_model(fits[[nm]], nboot = 3L, cores = 1L, seed = k))
-    got <- aw_boot_pls(fits[[nm]], nboot = 3L, seed = k)
-    expect_identical(got$native, !is.null(arwad:::aw_pls_spec(fits[[nm]])), label = paste(nm, "native"))
+    # seminr warns ("NaNs produced") in resamples for which consistent PLS
+    # is undefined, and leaves them out; aw_boot_pls() says so in a message.
+    utils::capture.output(want <- tryCatch(suppressWarnings(suppressMessages(
+      seminr::bootstrap_model(fits[[nm]], nboot = 3L, cores = 1L, seed = k))), error = function(e) e))
+    utils::capture.output(got <- tryCatch(suppressMessages(aw_boot_pls(fits[[nm]], nboot = 3L, seed = k)), error = function(e) e))
+    if (!inherits(want, "boot_seminr_model")) {
+      expect_same_outcome(got, want, nm)
+      next
+    }
+    expect_true(got$native, label = paste(nm, "native"))
     for (f in exact) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(nm, f))
     expect_identical(is.na(got$boot_HTMT), is.na(want$boot_HTMT), label = paste(nm, "HTMT pattern"))
     # HTMT: the distance in units in the last place (the spacing of doubles
@@ -404,10 +413,61 @@ test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() doe
   sw <- summary(want)
   for (f in c("bootstrapped_paths", "bootstrapped_weights", "bootstrapped_loadings", "bootstrapped_total_paths"))
     expect_identical(sg[[f]], sw[[f]], label = paste("summary()", f))
-  mb <- suppressMessages(seminr::estimate_pls(seminr::mobi, seminr::constructs(
-    seminr::reflective("Image", seminr::multi_items("IMAG", 1:5)),
-    seminr::composite("Value", seminr::multi_items("PERV", 1:2))), seminr::relationships(seminr::paths(from = "Image", to = "Value"))))
-  fb <- suppressMessages(aw_boot_pls(mb, nboot = 3L, seed = 1L))
-  expect_false(fb$native)
+  # A reflective construct next to a composite: consistent PLS, native.
+  mm <- seminr::constructs(seminr::reflective("Image", seminr::multi_items("IMAG", 1:5)),
+                           seminr::composite("Value", seminr::multi_items("PERV", 1:2)))
+  sm <- seminr::relationships(seminr::paths(from = "Image", to = "Value"))
+  mb <- suppressMessages(seminr::estimate_pls(seminr::mobi, mm, sm))
+  fb <- aw_boot_pls(mb, nboot = 3L, seed = 1L)
+  expect_true(fb$native)
   expect_identical(fb$boot_paths, suppressMessages(seminr::bootstrap_model(mb, nboot = 3L, cores = 1L, seed = 1L))$boot_paths)
+  # The factorial scheme is outside the native subset: seminr bootstraps it.
+  mf <- suppressMessages(seminr::estimate_pls(seminr::mobi, mm, sm, inner_weights = seminr::path_factorial))
+  ff <- suppressMessages(aw_boot_pls(mf, nboot = 3L, seed = 1L))
+  expect_false(ff$native)
+  expect_identical(ff$boot_paths, suppressMessages(seminr::bootstrap_model(mf, nboot = 3L, cores = 1L, seed = 1L))$boot_paths)
+})
+
+test_that("aw_boot_pls() leaves out the resamples for which consistent PLS is undefined, as bootstrap_model() does", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  # In 4 of these 30 resamples a construct's rho_A is negative: seminr warns,
+  # leaves them out and reports 26 resamples.
+  m <- aw_pls_fit_models()[["sim02_J6_n100_plsc"]]
+  want <- suppressWarnings(suppressMessages(seminr::bootstrap_model(m, nboot = 30L, cores = 1L, seed = 7L)))
+  expect_message(got <- aw_boot_pls(m, nboot = 30L, seed = 7L), "4 of 30 resamples left out")
+  expect_true(got$native)
+  expect_identical(got$boots, 26L)
+  for (f in c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives", "loadings_descriptives",
+              "weights_descriptives", "total_paths_descriptives", "boots", "seed"))
+    expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = f)
+  expect_identical(dimnames(got$boot_HTMT), dimnames(want$boot_HTMT))
+  # With fewer than two resamples left, seminr stops: it reports an error and
+  # returns the model unbootstrapped, or the error reaches the caller.
+  # aw_boot_pls() hands that case to seminr, so the outcome is seminr's.
+  for (nm in c("mobi_ecsi_reflective", "sim02_J6_n100_plsc")) {
+    m <- aw_pls_fit_models()[[nm]]
+    utils::capture.output(want <- tryCatch(suppressWarnings(suppressMessages(
+      seminr::bootstrap_model(m, nboot = 1L, cores = 1L, seed = 7L))), error = function(e) e))
+    utils::capture.output(got <- tryCatch(suppressWarnings(suppressMessages(aw_boot_pls(m, nboot = 1L, seed = 7L))),
+                                          error = function(e) e))
+    expect_false(inherits(want, "boot_seminr_model"))
+    expect_same_outcome(got, want, paste(nm, "one resample"))
+  }
+})
+
+test_that("aw_boot_pls() estimates the resamples with seminr's default maxIt and stopCriterion, as bootstrap_model() does", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  # seminr 2.5.0 does not pass a model's maxIt and stopCriterion on to the
+  # resamples: they get 300 and 7 whatever the model was estimated with.
+  d <- aw_pls_models()[["mobi_ecsi_core"]]
+  for (s in list(c(maxIt = 5, stop = 7), c(maxIt = 3000, stop = 3), c(maxIt = 300, stop = 12))) {
+    m <- suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = s[["maxIt"]], stopCriterion = s[["stop"]]))
+    want <- suppressMessages(seminr::bootstrap_model(m, nboot = 5L, cores = 1L, seed = 3L))
+    got <- aw_boot_pls(m, nboot = 5L, seed = 3L)
+    expect_true(got$native)
+    for (f in c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives", "total_paths_descriptives"))
+      expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste("maxIt", s[["maxIt"]], "stop", s[["stop"]], f))
+  }
 })
