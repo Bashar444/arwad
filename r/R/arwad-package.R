@@ -12,5 +12,5 @@
 #' `R CMD SHLIB` instead of calling R's compiler directly).
 #'
 #' @keywords internal
-#' @importFrom stats .lm.fit
+#' @importFrom stats .lm.fit cor cov
 "_PACKAGE"
