@@ -1,3 +1,20 @@
+# arwad 0.1.0
+
+First citable release (28 October 2026), archived on Zenodo.
+
+* `aw_compile()` compiles R functions written in a statistical subset
+  (scalars, vectors and matrices, loops, R's random-number streams, BLAS and
+  LAPACK through R's own libraries) to native code through Goose; whatever
+  the native code does not model is re-run in GNU R. Bit-identical to GNU R
+  across a 201-function corpus on Linux, macOS and Windows, and clean under
+  AddressSanitizer.
+* Statistical engines, each validated on at least 50 datasets:
+  `aw_boot_ols()`, `aw_glm_fit()` and `aw_boot_glm()` (identical to
+  `.lm.fit()` and `glm.fit()`), `aw_boot_pls()` (a drop-in for
+  `seminr::bootstrap_model()` with Mode A and Mode B composites) and
+  `aw_pls_ci()` (bias-corrected percentile confidence intervals).
+* The development entries below record how the release came about.
+
 # arwad 0.0.0.9015
 
 * New `aw_pls_ci()`: bias-corrected percentile confidence intervals, the
