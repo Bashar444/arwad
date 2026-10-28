@@ -300,10 +300,6 @@ test_that("cov() and cor() of matrix columns keep column statistics only while t
   expect_identical(suppressWarnings(g(A, A, 1L)), suppressWarnings(f(A, A, 1L)))
 })
 
-aw_pls_fit_models <- function() {
-  lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
-}
-
 test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at least 50 models", {
   skip_if_no_toolchain()
   skip_if_not_installed("seminr")
@@ -364,6 +360,27 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
   utils::capture.output(info <- aw_explain(u))
   expect_gt(sum(info$calls), 50L)
   expect_identical(sum(info$bailouts), 0L)
+})
+
+test_that("socket-cluster workers find the Goose this process uses, also when it is set by option only", {
+  skip_if_no_toolchain()
+  # Before 0.0.0.9015 the workers of aw_boot_pls(cores = ) on Windows got no
+  # arwad.goose option and ran the engine in GNU R (same results, slower).
+  goose <- aw_toolchain()$goose
+  old <- Sys.getenv("ARWAD_GOOSE", unset = NA)
+  Sys.unsetenv("ARWAD_GOOSE")
+  op <- options(arwad.goose = goose)
+  on.exit({
+    options(op)
+    if (!is.na(old)) Sys.setenv(ARWAD_GOOSE = old)
+  })
+  cl <- arwad:::aw_cluster(2L)
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  got <- parallel::clusterEvalQ(cl, list(ok = arwad::aw_toolchain()$ok, goose = getOption("arwad.goose")))
+  for (w in got) {
+    expect_true(w$ok)
+    expect_identical(w$goose, goose)
+  }
 })
 
 test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() does, and hands other models to seminr", {

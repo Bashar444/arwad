@@ -120,4 +120,4 @@ A mistake caught by the benchmark: the first version of the PLS-SEM kernel assig
 
 ## 7. Environment and next steps
 
-Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0, Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): bias-corrected percentile intervals, then consistent PLS and interaction terms in the native PLS-SEM path (Mode B joined it on 28 October 2026, session 4; benchmarks above are of Mode A models); then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).
+Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0, Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): consistent PLS and interaction terms in the native PLS-SEM path, and BCa intervals (Mode B joined the native path on 28 October 2026, and bias-corrected percentile intervals followed the same day: `aw_pls_ci()`, [ADR-0007](../../docs/adr/0007-pls-sem-confidence-intervals.md)); then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).

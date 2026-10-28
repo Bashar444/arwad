@@ -161,3 +161,8 @@ aw_pls_models <- function() {
   if (is.null(seed)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", seed, envir = globalenv())
   out
 }
+
+# The models of aw_pls_models(), estimated by seminr::estimate_pls().
+aw_pls_fit_models <- function() {
+  lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
+}

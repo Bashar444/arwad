@@ -1,3 +1,20 @@
+# arwad 0.0.0.9015
+
+* New `aw_pls_ci()`: bias-corrected percentile confidence intervals, the
+  intervals the PLS-SEM Primer asks for, for every coefficient of a
+  bootstrapped model (paths, total and total indirect effects, loadings,
+  weights, HTMT) and for specific indirect effects, from `aw_boot_pls()` or
+  `seminr::bootstrap_model()`. With `type = "percentile"` the limits are
+  seminr's `summary()` limits, bit for bit; the bias correction is
+  `boot::boot.ci()`'s with zero acceleration. Each table adds the bias and
+  the skewness of the bootstrap values. Unlike seminr's `summary()`, the
+  total indirect effects follow `alpha` too.
+* Fixed: with `cores` above 1 on Windows, `aw_boot_pls()`'s worker processes
+  ran the engine in GNU R (same results, about 9 times slower) when Goose
+  was set only by `options(arwad.goose = )`. Workers now receive every
+  `arwad` option and the Goose executable this session uses. The published
+  benchmarks set Goose by environment variable and were not affected.
+
 # arwad 0.0.0.9014
 
 * `aw_boot_pls()` runs models with formative constructs

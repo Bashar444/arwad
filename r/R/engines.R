@@ -284,6 +284,25 @@ aw_pls_run <- function(spec, idx) {
   tryCatch(aw_pls_call(aw_pls_unit(), spec, idx), error = function(e) NULL)
 }
 
+# A socket cluster of `cores` new R processes set up like this one: its
+# library paths and every arwad option, with the cache and the Goose
+# executable this process uses (however it was found), so the workers load
+# the engines built here instead of running them in GNU R.
+aw_cluster <- function(cores) {
+  cl <- parallel::makeCluster(cores)
+  opts <- options()[startsWith(names(options()), "arwad.")]
+  opts$arwad.cache_dir <- aw_cache_dir()
+  tc <- aw_toolchain()
+  if (tc$ok) opts$arwad.goose <- tc$goose
+  parallel::clusterCall(cl, function(lib, opts) {
+    .libPaths(lib)
+    options(opts)
+    loadNamespace("arwad")
+    NULL
+  }, .libPaths(), opts)
+  cl
+}
+
 # aw_pls_run() over `cores` processes, each taking a contiguous block of the
 # resamples; the rows are bound back in order. The engine is built (or found
 # in the on-disk cache) here first, so the workers only load it.
@@ -294,14 +313,8 @@ aw_pls_run_cores <- function(spec, idx, cores) {
   if (.Platform$OS.type == "unix") {
     out <- parallel::mclapply(parts, function(cols) aw_pls_run(spec, idx[, cols, drop = FALSE]), mc.cores = cores)
   } else {
-    cl <- parallel::makeCluster(cores)
+    cl <- aw_cluster(cores)
     on.exit(parallel::stopCluster(cl))
-    parallel::clusterCall(cl, function(lib, cache, quiet) {
-      .libPaths(lib)
-      options(arwad.cache_dir = cache, arwad.quiet = quiet)
-      loadNamespace("arwad")
-      NULL
-    }, .libPaths(), aw_cache_dir(), getOption("arwad.quiet"))
     out <- parallel::parLapply(cl, parts, function(cols, spec, idx) {
       get("aw_pls_run", envir = asNamespace("arwad"))(spec, idx[, cols, drop = FALSE])
     }, spec = spec, idx = idx)
