@@ -231,3 +231,38 @@ test_that("BCa with zero acceleration is the BC interval, and needs a model in t
   bf <- suppressMessages(aw_boot_pls(mf, nboot = 20L, seed = 1L))
   expect_error(aw_pls_ci(bf, type = "bca"), "outside it")
 })
+
+test_that("BCa works with two-stage interaction terms: the jackknife equals seminr's leave-one-out estimates", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  designs <- aw_pls_interaction_models()
+  fits <- aw_pls_fit_interaction_models()
+  for (nm in c("mobi_ie_between", "mobi_two_terms")) {
+    m <- fits[[nm]]
+    d <- designs[[nm]]
+    n <- nrow(m$rawdata)
+    b <- suppressMessages(aw_boot_pls(m, nboot = 100L, seed = 4L))
+    expect_true(b$native)
+    ci <- aw_pls_ci(b, type = "bca")
+    expect_identical(ci$jackknife, n)
+    expect_true("Image*Expectation  ->  Satisfaction" %in% rownames(ci$paths))
+    bm <- m
+    class(bm) <- c("pls_model", "seminr_model")
+    spec <- arwad:::aw_pls_spec(bm)
+    rows <- arwad:::aw_pls_jack(spec)
+    cons <- spec$cons
+    J <- length(cons)
+    p <- length(spec$items)
+    at <- cbind(spec$items, cons[spec$blk])
+    # Every tenth leave-one-out sample, estimated by seminr itself (both
+    # stages, with the model's maxIt and stopCriterion).
+    for (i in seq(1L, n, by = 10L)) {
+      f <- suppressMessages(seminr::estimate_pls(m$rawdata[-i, , drop = FALSE], d$mm, d$sm, maxIt = d$maxIt, stopCriterion = d$stop))
+      expect_true(identical(rows[i, seq_len(p)], unname(f$outer_weights[at]), num.eq = FALSE), label = paste(nm, i, "weights"))
+      expect_true(identical(rows[i, p + seq_len(p * J)], as.vector(unname(f$outer_loadings[spec$items, cons])), num.eq = FALSE),
+                  label = paste(nm, i, "loadings"))
+      expect_true(identical(rows[i, p + p * J + seq_len(J * J)], as.vector(f$path_coef[cons, cons]), num.eq = FALSE),
+                  label = paste(nm, i, "paths"))
+    }
+  }
+})

@@ -212,6 +212,112 @@ aw_pls_fit_models <- function() {
   fits
 }
 
+# Models with two-stage interaction terms (moderation): the Primer's
+# corporate reputation model with switching costs moderating CUSA -> CUSL,
+# ECSI variants (the term first, between or after the constructs; two terms;
+# a Mode B iv; an endogenous iv; a term into a mediator; a quadratic term;
+# other maxIt and stopCriterion), and synthetic models whose data carry an
+# interaction effect. Each entry: data, mm, sm, maxIt, stop.
+aw_pls_interaction_models <- function() {
+  if (!requireNamespace("seminr", quietly = TRUE)) return(list())
+  S <- asNamespace("seminr")
+  comp <- function(nm, items, form = FALSE) if (form) S$composite(nm, items, weights = S$mode_B) else S$composite(nm, items)
+  term <- function(iv, mod) S$interaction_term(iv = iv, moderator = mod, method = S$two_stage)
+  sm <- function(...) {
+    e <- rbind(...)
+    do.call(S$relationships, lapply(seq_len(nrow(e)), function(r) S$paths(from = e[r, 1L], to = e[r, 2L])))
+  }
+  it <- function(stem, k) paste0(stem, k)
+  mobi <- seminr::mobi
+  img <- comp("Image", it("IMAG", 1:5))
+  exq <- comp("Expectation", it("CUEX", 1:3))
+  val <- comp("Value", it("PERV", 1:2))
+  sat <- comp("Satisfaction", it("CUSA", 1:3))
+  loy <- comp("Loyalty", it("CUSL", 1:3))
+  ie <- c("Image*Expectation", "Satisfaction")
+  core <- sm(c("Image", "Satisfaction"), c("Expectation", "Satisfaction"), c("Value", "Satisfaction"), ie)
+  cr <- seminr::corp_rep_data
+  crm <- S$constructs(comp("COMP", it("comp_", 1:3)), comp("LIKE", it("like_", 1:3)), comp("CUSA", "cusa"),
+                      comp("SC", it("switch_", 1:4)), comp("CUSL", it("cusl_", 1:3)), term("CUSA", "SC"))
+  crs <- sm(c("COMP", "CUSA"), c("LIKE", "CUSA"), c("COMP", "CUSL"), c("LIKE", "CUSL"), c("CUSA", "CUSL"), c("SC", "CUSL"),
+            c("CUSA*SC", "CUSL"))
+  out <- list(
+    corp_rep_moderation = list(data = cr, mm = crm, sm = crs, maxIt = 300L, stop = 7),
+    corp_rep_moderation_3000 = list(data = cr, mm = crm, sm = crs, maxIt = 3000L, stop = 10),
+    mobi_ie_last = list(data = mobi, mm = S$constructs(img, exq, val, sat, term("Image", "Expectation")), sm = core, maxIt = 300L, stop = 7),
+    mobi_ie_first = list(data = mobi, mm = S$constructs(term("Image", "Expectation"), img, exq, val, sat), sm = core, maxIt = 300L, stop = 7),
+    mobi_ie_between = list(data = mobi, mm = S$constructs(img, exq, term("Image", "Expectation"), val, sat), sm = core, maxIt = 1000L,
+                           stop = 9),
+    mobi_two_terms = list(data = mobi, mm = S$constructs(img, exq, val, sat, term("Image", "Expectation"), term("Image", "Value")),
+                          sm = sm(c("Image", "Satisfaction"), c("Expectation", "Satisfaction"), c("Value", "Satisfaction"), ie,
+                                  c("Image*Value", "Satisfaction")), maxIt = 300L, stop = 7),
+    mobi_image_modeB = list(data = mobi, mm = S$constructs(comp("Image", it("IMAG", 1:5), TRUE), exq, val, sat, term("Image", "Expectation")),
+                            sm = core, maxIt = 300L, stop = 7),
+    # Value is endogenous (Image -> Value); the term Value*Expectation goes
+    # into Satisfaction, which leads to Loyalty.
+    mobi_endogenous_iv = list(data = mobi, mm = S$constructs(img, exq, val, sat, loy, term("Value", "Expectation")),
+                              sm = sm(c("Image", "Value"), c("Value", "Satisfaction"), c("Expectation", "Satisfaction"),
+                                      c("Value*Expectation", "Satisfaction"), c("Satisfaction", "Loyalty")), maxIt = 300L, stop = 7),
+    mobi_term_into_mediator = list(data = mobi, mm = S$constructs(img, exq, val, sat, term("Image", "Expectation")),
+                                   sm = sm(c("Image", "Value"), c("Expectation", "Value"), c("Image*Expectation", "Value"),
+                                           c("Value", "Satisfaction"), c("Image", "Satisfaction")), maxIt = 300L, stop = 7),
+    mobi_quadratic = list(data = mobi, mm = S$constructs(img, sat, S$quadratic_term(iv = "Image", method = S$two_stage)),
+                          sm = sm(c("Image", "Satisfaction"), c("Image*Image", "Satisfaction")), maxIt = 300L, stop = 7))
+  seed <- get0(".Random.seed", envir = globalenv(), inherits = FALSE)
+  set.seed(20261029)
+  for (g in seq_len(24L)) {
+    J <- sample(3:6, 1L)
+    n <- sample(c(60L, 100L, 150L, 250L, 400L), 1L)
+    k <- sample(c(1L, 2L, 3L, 3L, 4L, 5L), J, replace = TRUE)
+    k[1:2] <- pmax(k[1:2], 2L)
+    # Constructs 1 and 2 are exogenous and both lead to construct J, with
+    # their interaction; the others form a chain with random extra paths.
+    E <- rbind(c(1L, J), c(2L, J))
+    if (J > 3L) for (j in 3:(J - 1L)) E <- rbind(E, c(sample.int(j - 1L, 1L), j), c(j, J))
+    eta <- matrix(stats::rnorm(n * J), n, J)
+    gam <- stats::runif(1L, -0.4, 0.4)
+    for (j in 3:J) {
+      pr <- E[E[, 2L] == j, 1L]
+      eta[, j] <- eta[, j] + drop(eta[, pr, drop = FALSE] %*% stats::runif(length(pr), -0.6, 0.8)) +
+        if (j == J) gam * eta[, 1L] * eta[, 2L] else 0
+    }
+    cols <- list()
+    blocks <- list()
+    for (j in seq_len(J)) {
+      nm <- paste0("c", j, "_", seq_len(k[j]))
+      blocks[[paste0("C", j)]] <- nm
+      for (i in seq_len(k[j])) {
+        x <- stats::runif(1L, 0.5, 0.95) * eta[, j] / stats::sd(eta[, j]) + stats::rnorm(n, 0, 0.6)
+        if (g %% 3L == 0L) x <- pmin(pmax(round(4 + 1.2 * x), 1), 7)
+        if (g %% 4L == 1L) x <- x * 10^stats::runif(1L, -1, 2) + stats::runif(1L, -50, 50)
+        cols[[nm[i]]] <- x
+      }
+    }
+    form <- g %% 4L == 2L & k > 1L & seq_len(J) %% 2L == 1L
+    cs <- lapply(seq_len(J), function(j) comp(paste0("C", j), blocks[[j]], form[j]))
+    # The second term (every third model) is C2's square; some models put the
+    # terms first. (seminr 2.6.0's estimate_pls() stops on two terms when one
+    # multiplies an endogenous construct, so the synthetic models avoid that.)
+    terms <- list(term("C1", "C2"))
+    e <- rbind(cbind(paste0("C", E[, 1L]), paste0("C", E[, 2L])), c("C1*C2", paste0("C", J)))
+    if (g %% 3L == 0L) {
+      terms <- c(terms, list(term("C2", "C2")))
+      e <- rbind(e, c("C2*C2", paste0("C", J)))
+    }
+    mmg <- if (g %% 5L == 0L) do.call(S$constructs, c(terms, cs)) else do.call(S$constructs, c(cs, terms))
+    out[[sprintf("sim%02d_J%d_n%d%s", g, J, n, if (any(form)) "_modeB" else "")]] <-
+      list(data = as.data.frame(cols), mm = mmg, sm = do.call(sm, lapply(seq_len(nrow(e)), function(r) e[r, ])),
+           maxIt = if (g %% 5L == 0L) 3000L else 300L, stop = 7)
+  }
+  if (is.null(seed)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", seed, envir = globalenv())
+  out
+}
+
+aw_pls_fit_interaction_models <- function() {
+  ds <- aw_pls_interaction_models()
+  lapply(ds, function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt, stopCriterion = d$stop)))
+}
+
 # For a case seminr does not bootstrap (it stops when fewer than two
 # resamples are left): aw_boot_pls() handed it to seminr and ended the same
 # way (the same error, or the model returned as it was). The tests call

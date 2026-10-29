@@ -269,7 +269,8 @@ aw_pls_ci_jack <- function(boot) {
   spec <- aw_pls_spec(m)
   if (is.null(spec)) {
     stop("type = \"bca\" re-estimates the model on every leave-one-out sample with the native PLS engine, ",
-         "and this model is outside it (other weighting schemes, interaction terms, higher-order constructs, missing data)",
+         "and this model is outside it (other weighting schemes, product-indicator or orthogonal interaction terms, ",
+         "consistent PLS with interaction terms, higher-order constructs, missing data)",
          call. = FALSE)
   }
   rows <- aw_pls_jack(spec)

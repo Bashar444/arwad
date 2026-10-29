@@ -72,7 +72,15 @@ aw_boot_ols <- function(X, y, B = 1000L) {
 # change, and a status: 1 when consistent PLS is undefined for the sample (a
 # rho_A that is not positive and finite), 2 when its solution is
 # inadmissible, as seminr 2.6.0 checks it.
-aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
+# Two-stage interaction terms (Henseler and Chin, 2010): ix[k] = m > 0 when
+# column k of X is the single indicator of the m-th term (a placeholder in X;
+# the kernel fills it for each sample) and xj[j] = m when construct j is that
+# term. The first stage is the model without its interaction terms; row r of
+# W1 holds its weights for sample r (one per first-stage indicator, from a
+# run of this kernel on it), k1[a] is the column of X of its a-th indicator
+# and c1[a] that indicator's first-stage construct, and iv1[m] and md1[m]
+# are the first-stage constructs whose scores the m-th term multiplies.
+aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx, ix, xj, k1, c1, iv1, md1, W1) {
   # The sample size is the number of rows of idx: n for a bootstrap
   # resample, n - 1 for a leave-one-out (jackknife) sample.
   n <- nrow(idx)
@@ -100,14 +108,41 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
   wwv <- numeric(J)
   plsc <- 0L
   for (j in seq_len(J)) if (mode[j] == 3L) plsc <- 1L
+  ni <- 0L
+  for (k in seq_len(p)) if (ix[k] > ni) ni <- ix[k]
+  p1 <- length(k1)
+  J1 <- 0L
+  for (a in seq_len(p1)) if (c1[a] > J1) J1 <- c1[a]
+  xs <- numeric(ni)
   for (r in seq_len(R)) {
-    for (k in seq_len(p)) for (i in seq_len(n)) Xb[i, k] <- X[idx[i, r], k]
+    for (k in seq_len(p)) if (ix[k] == 0L) for (i in seq_len(n)) Xb[i, k] <- X[idx[i, r], k]
     # The indicators, standardised as scale() does.
     cm <- colMeans(Xb)
-    for (k in seq_len(p)) {
+    for (k in seq_len(p)) if (ix[k] == 0L) {
       v <- Xb[, k] - cm[k]
       s <- sqrt(sum(v^2) / (n - 1))
       for (i in seq_len(n)) Z[i, k] <- v[i] / s
+    }
+    # Each interaction term's indicator: the product of the first stage's
+    # scores of its two constructs (the first-stage indicators, standardised,
+    # times its weights), standardised in turn. xs[m] keeps the product's
+    # standard deviation, sd() computed as sqrt(cov(x, x)).
+    if (ni > 0L) {
+      Z1 <- matrix(0, n, p1)
+      W1m <- matrix(0, p1, J1)
+      for (a in seq_len(p1)) {
+        for (i in seq_len(n)) Z1[i, a] <- Z[i, k1[a]]
+        W1m[a, c1[a]] <- W1[r, a]
+      }
+      S1 <- Z1 %*% W1m
+      for (k in seq_len(p)) if (ix[k] > 0L) for (i in seq_len(n)) Xb[i, k] <- S1[i, iv1[ix[k]]] * S1[i, md1[ix[k]]]
+      cm <- colMeans(Xb)
+      for (k in seq_len(p)) if (ix[k] > 0L) {
+        v <- Xb[, k] - cm[k]
+        s <- sqrt(sum(v^2) / (n - 1))
+        for (i in seq_len(n)) Z[i, k] <- v[i] / s
+        xs[ix[k]] <- sqrt(cov(Xb[, k], Xb[, k]))
+      }
     }
     # Mode B: the inverse of each such construct's indicator correlations,
     # which stays the same in every iteration of a sample (Ci[k, l] for two
@@ -182,8 +217,11 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
       it <- iter
       if (dw < crit) break
     }
-    # Final scores (not rescaled), path coefficients, total effects.
+    # Final scores (not rescaled), path coefficients, total effects. seminr
+    # gives an interaction term's score the standard deviation of its product
+    # (the paths into and out of it, and its loading, follow from that score).
     Y <- Z %*% W
+    for (j in seq_len(J)) if (xj[j] > 0L) for (i in seq_len(n)) Y[i, j] <- Y[i, j] * xs[xj[j]]
     # Consistent PLS (Dijkstra and Henseler, 2015) when the model has a
     # reflective construct: rho_A from the final weights w and the indicators'
     # covariances S, (w'w)^2 w'(S - diag S)w / w'(ww' - diag ww')w, for every
@@ -371,9 +409,10 @@ aw_seminr_260 <- function() utils::packageVersion("seminr") >= "2.6.0"
 # What the PLS kernel needs from a model estimated by seminr::estimate_pls(),
 # or NULL when the model is outside the native subset: composites with Mode A
 # or Mode B weights and reflective() constructs (type "C" in the mmMatrix,
-# estimated by consistent PLS), the path weighting scheme, each indicator in
-# one construct, complete numeric data (no interaction terms or higher-order
-# constructs).
+# estimated by consistent PLS), two-stage interaction terms in a model of
+# composites, the path weighting scheme, each indicator in one construct,
+# complete numeric data (no product-indicator or orthogonal interaction
+# terms, no higher-order constructs).
 aw_pls_spec <- function(model) {
   if (!inherits(model, "pls_model")) stop("'seminr_model' must be a model estimated by seminr::estimate_pls()")
   mm <- model$mmMatrix
@@ -385,13 +424,52 @@ aw_pls_spec <- function(model) {
   if (!is.matrix(mm) || !is.matrix(sm) || !all(mm[, "type"] %in% c("A", "B", "C")) || anyDuplicated(mm[, "measurement"]) ||
       !setequal(mm[, "measurement"], items) || !all(mm[, "construct"] %in% cons) || !all(cons %in% mm[, "construct"]) ||
       !all(c(sm[, "source"], sm[, "target"]) %in% cons) || !identical(model$inner_weights, seminr::path_weighting) ||
-      !is.data.frame(raw) || !all(items %in% names(raw))) return(NULL)
-  X <- raw[, items, drop = FALSE]
+      !is.data.frame(raw)) return(NULL)
+  ints <- aw_pls_interactions(model, mm, cons, items, names(raw))
+  if (is.null(ints)) return(NULL)
+  obs <- items[!items %in% ints[, "item"]]
+  X <- raw[, obs, drop = FALSE]
   if (!all(vapply(X, is.numeric, NA)) || anyNA(X) || nrow(X) < 3L) return(NULL)
   X <- as.matrix(X)
   dimnames(X) <- NULL
   storage.mode(X) <- "double"
   if (!all(is.finite(X))) return(NULL)
+  # An interaction term's column is a placeholder: the kernel computes it
+  # for each sample.
+  Xf <- matrix(0, nrow(X), length(items))
+  Xf[, match(obs, items)] <- X
+  spec <- aw_pls_spec_parts(mm, sm, cons, items)
+  if (is.null(spec)) return(NULL)
+  spec <- c(list(X = Xf), spec, list(maxIt = as.integer(model$settings$maxIt), crit = 10^-model$settings$stopCriterion,
+                                     cons = cons, items = items))
+  spec$ix <- match(items, ints[, "item"], nomatch = 0L)
+  spec$xj <- match(cons, ints[, "construct"], nomatch = 0L)
+  if (!nrow(ints)) return(spec)
+  # The first stage: the model without its interaction terms (and the paths
+  # from them), estimated with seminr's defaults, maxIt = 300 and
+  # stopCriterion = 7, whatever the model was estimated with, as seminr
+  # does. Consistent PLS with interaction terms is left to seminr, and so is
+  # a construct that the first stage would leave without a path.
+  if (any(spec$mode >= 3L)) return(NULL)
+  cons1 <- cons[!cons %in% ints[, "construct"]]
+  sm1 <- sm[!sm[, "source"] %in% ints[, "construct"], , drop = FALSE]
+  if (!all(cons1 %in% c(sm1[, "source"], sm1[, "target"]))) return(NULL)
+  s1 <- aw_pls_spec_parts(mm[mm[, "construct"] %in% cons1, , drop = FALSE], sm1, cons1, obs)
+  if (is.null(s1)) return(NULL)
+  spec$stage1 <- c(list(X = X), s1, list(maxIt = 300L, crit = 10^-7, cons = cons1, items = obs, ix = integer(length(obs)),
+                                         xj = integer(length(cons1))))
+  spec$k1 <- match(obs, items)
+  spec$c1 <- s1$blk
+  spec$iv1 <- match(ints[, "iv"], cons1)
+  spec$md1 <- match(ints[, "moderator"], cons1)
+  spec
+}
+
+# The parts of a kernel spec that come from the measurement and structural
+# model: each indicator's construct (blk) and place in it (pos), indicators
+# per construct (nb), each construct's mode, and the antecedents (pre); NULL
+# when a construct mixes types or is a Mode B construct with one indicator.
+aw_pls_spec_parts <- function(mm, sm, cons, items) {
   J <- length(cons)
   pre <- matrix(0L, J, J)
   for (j in seq_len(J)) {
@@ -411,13 +489,48 @@ aw_pls_spec <- function(model) {
   if (any(mode == 2L & nb < 2L)) return(NULL)
   pos <- integer(length(items))
   for (j in seq_len(J)) pos[blk == j] <- seq_len(nb[j])
-  list(X = X, blk = blk, pos = pos, nb = nb, mode = mode, pre = pre,
-       maxIt = as.integer(model$settings$maxIt), crit = 10^-model$settings$stopCriterion, cons = cons, items = items)
+  list(blk = blk, pos = pos, nb = nb, mode = mode, pre = pre)
 }
 
-# Calls `kernel` (aw_pls_kernel() or its compiled unit) on the samples in idx.
-aw_pls_call <- function(kernel, spec, idx) {
-  kernel(spec$X, spec$blk, spec$pos, spec$nb, spec$mode, spec$pre, spec$maxIt, spec$crit, idx)
+# The two-stage interaction terms of a model, one row each: the term's
+# construct, its single indicator (the construct's name and "_intxn"; not in
+# the data), and the two constructs it multiplies, from its name, which
+# seminr documents as "iv*moderator". A matrix with no rows for a model
+# without interaction terms; NULL for one outside the native subset
+# (product-indicator, orthogonal or other interaction terms, or an indicator
+# missing from the data that is no such term).
+aw_pls_interactions <- function(model, mm, cons, items, vars) {
+  out <- matrix(character(), 0L, 4L, dimnames = list(NULL, c("construct", "item", "iv", "moderator")))
+  extra <- items[!items %in% vars]
+  terms <- Filter(function(e) inherits(e, "interaction"), model$measurement_model)
+  if (!length(extra) && !length(terms)) return(out)
+  if (length(extra) != length(terms) || !all(vapply(terms, inherits, NA, "two_stage_interaction"))) return(NULL)
+  tc <- mm[match(extra, mm[, "measurement"]), "construct"]
+  if (anyDuplicated(tc) || !identical(extra, paste0(tc, "_intxn")) || any(tabulate(match(mm[, "construct"], tc), length(tc)) != 1L)) return(NULL)
+  main <- cons[!cons %in% tc]
+  for (cn in tc) {
+    at <- gregexpr("*", cn, fixed = TRUE)[[1L]]
+    pairs <- lapply(at[at > 0L], function(a) c(substr(cn, 1L, a - 1L), substr(cn, a + 1L, nchar(cn))))
+    pairs <- Filter(function(pr) all(pr %in% main), pairs)
+    if (length(pairs) != 1L) return(NULL)
+    out <- rbind(out, c(cn, paste0(cn, "_intxn"), pairs[[1L]]))
+  }
+  out
+}
+
+# Calls `kernel` (aw_pls_kernel() or its compiled unit) on the samples in idx;
+# W1 holds the first stage's weights for those samples when the model has
+# interaction terms.
+aw_pls_call <- function(kernel, spec, idx, W1 = NULL) {
+  if (is.null(spec$ix)) spec$ix <- integer(length(spec$items))
+  if (is.null(spec$xj)) spec$xj <- integer(length(spec$cons))
+  if (is.null(W1)) W1 <- matrix(0, 1L, 1L)
+  k1 <- if (is.null(spec$k1)) 0L else spec$k1
+  c1 <- if (is.null(spec$c1)) 0L else spec$c1
+  iv1 <- if (is.null(spec$iv1)) 0L else spec$iv1
+  md1 <- if (is.null(spec$md1)) 0L else spec$md1
+  kernel(spec$X, spec$blk, spec$pos, spec$nb, spec$mode, spec$pre, spec$maxIt, spec$crit, idx, spec$ix, spec$xj, k1, c1, iv1,
+         md1, W1)
 }
 
 aw_pls_unit <- function() {
@@ -426,9 +539,15 @@ aw_pls_unit <- function() {
 }
 
 # Runs the kernel on the samples in idx; NULL when the native run fails (the
-# caller then hands the work to seminr).
+# caller then hands the work to seminr). A model with interaction terms is
+# estimated twice per sample: its first stage, whose weights then go into
+# the second.
 aw_pls_run <- function(spec, idx) {
-  tryCatch(aw_pls_call(aw_pls_unit(), spec, idx), error = function(e) NULL)
+  tryCatch({
+    W1 <- NULL
+    if (!is.null(spec$stage1)) W1 <- aw_pls_call(aw_pls_unit(), spec$stage1, idx)[, seq_along(spec$k1), drop = FALSE]
+    aw_pls_call(aw_pls_unit(), spec, idx, W1)
+  }, error = function(e) NULL)
 }
 
 # The model re-estimated on its n leave-one-out samples (the jackknife behind
@@ -509,9 +628,20 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 #' Path coefficients, total effects, loadings and weights are bit-identical to
 #' `bootstrap_model()`; HTMT ratios agree to within four units in the last
 #' place. The caller's random-number state is left as it was. Models outside
-#' the native subset (other weighting schemes, interaction terms,
+#' the native subset (other weighting schemes, product-indicator or
+#' orthogonal interaction terms, consistent PLS with interaction terms,
 #' higher-order constructs, missing data) are passed to
 #' `seminr::bootstrap_model()` itself.
+#'
+#' Two-stage interaction terms (moderation, seminr's default
+#' `interaction_term(iv, moderator, method = two_stage)`, and
+#' `quadratic_term()`) are native in models of composites. As in seminr, each
+#' resample is estimated twice: first the model without its interaction
+#' terms, with `maxIt = 300` and `stopCriterion = 7` (also for the original
+#' sample, whatever the model was estimated with); then the full model, in
+#' which each term's single indicator is the product of the first stage's
+#' scores of its two constructs, and the term's score keeps that product's
+#' standard deviation, so its paths are in the units seminr reports.
 #'
 #' The engine follows the installed version of seminr (2.5.0 or 2.6.0), so
 #' that the numbers stay seminr's. Every resample is estimated with seminr's

@@ -34,11 +34,22 @@ resample \code{b} is \code{sample.int(n, replace = TRUE)} after \code{set.seed(s
 Path coefficients, total effects, loadings and weights are bit-identical to
 \code{bootstrap_model()}; HTMT ratios agree to within four units in the last
 place. The caller's random-number state is left as it was. Models outside
-the native subset (other weighting schemes, interaction terms,
+the native subset (other weighting schemes, product-indicator or
+orthogonal interaction terms, consistent PLS with interaction terms,
 higher-order constructs, missing data) are passed to
 \code{seminr::bootstrap_model()} itself.
 }
 \details{
+Two-stage interaction terms (moderation, seminr's default
+\code{interaction_term(iv, moderator, method = two_stage)}, and
+\code{quadratic_term()}) are native in models of composites. As in seminr, each
+resample is estimated twice: first the model without its interaction
+terms, with \code{maxIt = 300} and \code{stopCriterion = 7} (also for the original
+sample, whatever the model was estimated with); then the full model, in
+which each term's single indicator is the product of the first stage's
+scores of its two constructs, and the term's score keeps that product's
+standard deviation, so its paths are in the units seminr reports.
+
 The engine follows the installed version of seminr (2.5.0 or 2.6.0), so
 that the numbers stay seminr's. Every resample is estimated with seminr's
 default \code{maxIt} (300) and \code{stopCriterion} (7), whatever the model was

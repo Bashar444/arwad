@@ -1,3 +1,21 @@
+# arwad 0.1.0.9003
+
+* `aw_boot_pls()` runs models with two-stage interaction terms (moderation:
+  `interaction_term(iv, moderator, method = two_stage)`, seminr's default,
+  and `quadratic_term()`) natively, in models of Mode A and Mode B
+  composites. As seminr does, every resample is estimated twice: the model
+  without its interaction terms first (always with `maxIt = 300` and
+  `stopCriterion = 7`), then the full model, in which each term's indicator
+  is the product of the first stage's scores and the term's score keeps
+  that product's standard deviation. On 34 test models (the Primer's
+  corporate reputation model with switching costs moderating CUSA -> CUSL,
+  ECSI variants, a quadratic term and 24 synthetic models) the estimates and
+  bootstraps are bit-identical to seminr 2.6.0 and 2.5.0 (HTMT within two
+  units in the last place). BCa intervals work for these models too.
+  Product-indicator and orthogonal terms, and consistent PLS with
+  interaction terms, are still handed to seminr (ADR-0006, amendment
+  "two-stage interaction terms").
+
 # arwad 0.1.0.9002
 
 * `aw_pls_ci(type = "bca")`: bias-corrected and accelerated (BCa) intervals

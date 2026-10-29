@@ -382,6 +382,83 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
   expect_identical(sum(info$bailouts), 0L)
 })
 
+test_that("with two-stage interaction terms the compiled PLS path algorithm equals estimate_pls() on at least 30 models", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  fits <- aw_pls_fit_interaction_models()
+  expect_gte(length(fits), 30L)
+  for (nm in names(fits)) {
+    m <- fits[[nm]]
+    s <- arwad:::aw_pls_spec(m)
+    expect_false(is.null(s), label = paste(nm, "is in the native subset"))
+    if (is.null(s)) next
+    expect_gte(max(s$ix), 1L, label = paste(nm, "interaction terms"))
+    o <- arwad:::aw_pls_run(s, matrix(seq_len(nrow(s$X)), ncol = 1L))
+    p <- length(s$items)
+    pJ <- p * length(s$cons)
+    JJ <- length(s$cons)^2
+    at <- cbind(s$items, s$cons[s$blk])
+    expect_true(identical(o[1L, seq_len(p)], unname(m$outer_weights[at]), num.eq = FALSE), label = paste(nm, "weights"))
+    expect_true(identical(o[1L, p + seq_len(pJ)], as.vector(unname(m$outer_loadings[s$items, s$cons])), num.eq = FALSE),
+                label = paste(nm, "loadings"))
+    expect_true(identical(o[1L, p + pJ + seq_len(JJ)], as.vector(m$path_coef[s$cons, s$cons]), num.eq = FALSE),
+                label = paste(nm, "paths"))
+    expect_identical(as.integer(o[1L, p + pJ + 3L * JJ + 1L]), m$iterations, label = paste(nm, "iterations"))
+    expect_true(identical(o[1L, p + pJ + 3L * JJ + 2L], m$weightDiff, num.eq = FALSE), label = paste(nm, "weight change"))
+  }
+})
+
+test_that("aw_boot_pls() equals bootstrap_model() on models with two-stage interaction terms", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  fits <- aw_pls_fit_interaction_models()
+  exact <- c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives",
+             "loadings_descriptives", "weights_descriptives", "total_paths_descriptives", "boots", "boots_requested",
+             "boots_dropped", "seed")
+  for (k in seq_along(fits)) {
+    nm <- names(fits)[k]
+    want <- suppressMessages(seminr::bootstrap_model(fits[[nm]], nboot = 3L, cores = 1L, seed = k))
+    got <- suppressMessages(aw_boot_pls(fits[[nm]], nboot = 3L, seed = k))
+    expect_true(got$native, label = paste(nm, "native"))
+    for (f in exact) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(nm, f))
+    expect_identical(dimnames(got$boot_HTMT), dimnames(want$boot_HTMT))
+    ok <- !is.na(want$boot_HTMT)
+    w <- want$boot_HTMT[ok]
+    ulp <- pmax(2^(floor(log2(abs(w))) - 52), .Machine$double.xmin)
+    expect_lte(max(0, abs(got$boot_HTMT[ok] - w) / ulp), 4, label = paste(nm, "HTMT within four units in the last place"))
+  }
+  # Two cores give the same arrays as one. (The workers load the installed
+  # arwad: an older installation hands the model to seminr, hence `native`.)
+  m <- fits[["corp_rep_moderation"]]
+  one <- aw_boot_pls(m, nboot = 6L, seed = 3L)
+  two <- aw_boot_pls(m, nboot = 6L, seed = 3L, cores = 2L)
+  expect_true(two$native, label = "two cores native")
+  for (f in c("boot_paths", "boot_loadings", "boot_weights", "boot_HTMT", "boot_total_paths"))
+    expect_true(identical(two[[f]], one[[f]], num.eq = FALSE), label = paste("two cores", f))
+})
+
+test_that("product-indicator and orthogonal terms, and consistent PLS with a two-stage term, go to seminr", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  S <- asNamespace("seminr")
+  img <- S$composite("Image", S$multi_items("IMAG", 1:5))
+  rest <- list(S$composite("Expectation", S$multi_items("CUEX", 1:3)), S$composite("Satisfaction", S$multi_items("CUSA", 1:3)))
+  sm <- S$relationships(S$paths(to = "Satisfaction", from = c("Image", "Expectation", "Image*Expectation")))
+  models <- list(
+    product_indicator = c(list(img), rest, list(S$interaction_term("Image", "Expectation", method = S$product_indicator))),
+    orthogonal = c(list(img), rest, list(S$interaction_term("Image", "Expectation", method = S$orthogonal))),
+    reflective = c(list(S$reflective("Image", S$multi_items("IMAG", 1:5))), rest,
+                   list(S$interaction_term("Image", "Expectation", method = S$two_stage))))
+  for (nm in names(models)) {
+    m <- suppressWarnings(suppressMessages(seminr::estimate_pls(seminr::mobi, do.call(S$constructs, models[[nm]]), sm)))
+    expect_null(arwad:::aw_pls_spec(m), label = nm)
+    want <- suppressWarnings(suppressMessages(seminr::bootstrap_model(m, nboot = 3L, cores = 1L, seed = 2L)))
+    got <- suppressWarnings(suppressMessages(aw_boot_pls(m, nboot = 3L, seed = 2L)))
+    expect_false(got$native, label = nm)
+    expect_identical(got$boot_paths, want$boot_paths, label = nm)
+  }
+})
+
 test_that("socket-cluster workers find the Goose this process uses, also when it is set by option only", {
   skip_if_no_toolchain()
   # Before 0.0.0.9015 the workers of aw_boot_pls(cores = ) on Windows got no
