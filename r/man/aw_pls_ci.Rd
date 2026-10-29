@@ -59,7 +59,7 @@ half the resamples fall below the estimate. Bootstrap values that differ
 only by rounding, such as the loading of a single-indicator construct,
 get their percentile limits and no skewness.
 
-Unlike \code{summary()} of \code{seminr} 2.5.0, which reports total indirect effects
+Unlike \code{summary()} of \code{seminr} (2.5.0 and 2.6.0), which reports total indirect effects
 at 95\% whatever \code{alpha} is, every table here uses \code{alpha}.
 }
 \examples{

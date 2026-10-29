@@ -38,15 +38,22 @@ higher-order constructs, missing data) are passed to
 \code{seminr::bootstrap_model()} itself.
 }
 \details{
-Two behaviours of \code{bootstrap_model()} (seminr 2.5.0) are kept, so that
-the numbers stay seminr's. Every resample is estimated with seminr's
+The engine follows the installed version of seminr (2.5.0 or 2.6.0), so
+that the numbers stay seminr's. Every resample is estimated with seminr's
 default \code{maxIt} (300) and \code{stopCriterion} (7), whatever the model was
-estimated with. In a model with a reflective construct, consistent PLS
-corrects the correlations of every Mode A construct with two or more
-indicators, \code{composite()} ones included, not only the reflective ones;
-resamples for which it is undefined (a negative rho_A) are left out of the
-bootstrap and \code{boots} counts the others, with a message. When fewer than
-two resamples are left, the model goes to \code{bootstrap_model()}, which then
+estimated with, as \code{bootstrap_model()} does. In a model with a reflective
+construct, consistent PLS corrects the reflective constructs and treats
+composites as fully reliable; seminr before 2.6.0 corrects every Mode A
+construct with two or more indicators, \code{composite()} ones included.
+Resamples for which consistent PLS is undefined (a negative rho_A) are
+left out of the bootstrap and \code{boots} counts the others, with a message.
+From seminr 2.6.0 on, so are the resamples whose consistent-PLS solution
+is inadmissible (a rho_A above one, a loading of a reflective construct
+above one, a corrected construct correlation of one or more, an R-squared
+outside [0, 1], or a construct correlation matrix implied by the
+structural model that is not positive definite), and the object also
+records \code{boots_requested} and \code{boots_dropped}. When fewer than two
+resamples are left, the model goes to \code{bootstrap_model()}, which then
 stops.
 
 With \code{cores} above 1 the resamples are split over that many worker

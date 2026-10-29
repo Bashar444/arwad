@@ -304,6 +304,8 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
   skip_if_no_toolchain()
   skip_if_not_installed("seminr")
   fits <- aw_pls_fit_models()
+  inadmissible <- attr(fits, "inadmissible")
+  v260 <- arwad:::aw_seminr_260()
   native <- 0L
   formative <- 0L
   plsc <- 0L
@@ -327,7 +329,14 @@ test_that("the compiled PLS path algorithm equals seminr::estimate_pls() on at l
                 label = paste(nm, "paths"))
     expect_identical(as.integer(o[1L, p + pJ + 3L * JJ + 1L]), m$iterations, label = paste(nm, "iterations"))
     expect_true(identical(o[1L, p + pJ + 3L * JJ + 2L], m$weightDiff, num.eq = FALSE), label = paste(nm, "weight change"))
-    expect_identical(o[1L, p + pJ + 3L * JJ + 3L], 0, label = paste(nm, "status"))
+    # Status 2 marks an inadmissible consistent-PLS solution: exactly the
+    # models for which seminr 2.6.0 warns (seminr 2.5.0 does not check).
+    st <- o[1L, p + pJ + 3L * JJ + 3L]
+    if (v260) {
+      expect_identical(st, if (inadmissible[[nm]]) 2 else 0, label = paste(nm, "status"))
+    } else {
+      expect_true(st %in% c(0, 2), label = paste(nm, "status"))
+    }
   }
   expect_gte(native, 120L)
   expect_gte(formative, 30L)
@@ -339,8 +348,10 @@ test_that("aw_boot_pls() equals seminr::bootstrap_model() on at least 50 models"
   skip_if_not_installed("seminr")
   fits <- aw_pls_fit_models()
   expect_gte(length(fits), 50L)
+  # boots_requested and boots_dropped exist from seminr 2.6.0 on (NULL before).
   exact <- c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives",
-             "loadings_descriptives", "weights_descriptives", "total_paths_descriptives", "boots", "seed")
+             "loadings_descriptives", "weights_descriptives", "total_paths_descriptives", "boots", "boots_requested",
+             "boots_dropped", "seed")
   for (k in seq_along(fits)) {
     nm <- names(fits)[k]
     # seminr warns ("NaNs produced") in resamples for which consistent PLS
@@ -431,17 +442,21 @@ test_that("aw_boot_pls() leaves the random-number state as bootstrap_model() doe
 test_that("aw_boot_pls() leaves out the resamples for which consistent PLS is undefined, as bootstrap_model() does", {
   skip_if_no_toolchain()
   skip_if_not_installed("seminr")
-  # In 4 of these 30 resamples a construct's rho_A is negative: seminr warns,
-  # leaves them out and reports 26 resamples.
+  # In 4 of these 30 resamples a construct's rho_A is negative: seminr leaves
+  # them out and reports the others. seminr 2.6.0 also leaves out the 23 with
+  # an inadmissible solution, and records the counts in the type of nboot.
   m <- aw_pls_fit_models()[["sim02_J6_n100_plsc"]]
-  want <- suppressWarnings(suppressMessages(seminr::bootstrap_model(m, nboot = 30L, cores = 1L, seed = 7L)))
-  expect_message(got <- aw_boot_pls(m, nboot = 30L, seed = 7L), "4 of 30 resamples left out")
-  expect_true(got$native)
-  expect_identical(got$boots, 26L)
-  for (f in c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives", "loadings_descriptives",
-              "weights_descriptives", "total_paths_descriptives", "boots", "seed"))
-    expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = f)
-  expect_identical(dimnames(got$boot_HTMT), dimnames(want$boot_HTMT))
+  left <- if (arwad:::aw_seminr_260()) 27L else 4L
+  fields <- c("boot_paths", "boot_loadings", "boot_weights", "boot_total_paths", "paths_descriptives", "loadings_descriptives",
+              "weights_descriptives", "total_paths_descriptives", "boots", "boots_requested", "boots_dropped", "seed")
+  for (nb in list(30L, 30)) {
+    want <- suppressWarnings(suppressMessages(seminr::bootstrap_model(m, nboot = nb, cores = 1L, seed = 7L)))
+    expect_message(got <- aw_boot_pls(m, nboot = nb, seed = 7L), sprintf("%d of 30 resamples left out", left))
+    expect_true(got$native)
+    expect_identical(got$boots, nb - left)
+    for (f in fields) expect_true(identical(got[[f]], want[[f]], num.eq = FALSE), label = paste(f, "nboot", class(nb)))
+    expect_identical(dimnames(got$boot_HTMT), dimnames(want$boot_HTMT))
+  }
   # With fewer than two resamples left, seminr stops: it reports an error and
   # returns the model unbootstrapped, or the error reaches the caller.
   # aw_boot_pls() hands that case to seminr, so the outcome is seminr's.

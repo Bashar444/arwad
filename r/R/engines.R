@@ -59,17 +59,19 @@ aw_boot_ols <- function(X, y, B = 1000L) {
 # The compiled kernel of aw_boot_pls(): the PLS path algorithm (Wold 1982;
 # Lohmoller 1989) with Mode A or Mode B outer weights and the path weighting
 # scheme, for every column of `idx` (row indices of one sample each). Each
-# numeric step was matched to seminr 2.5.0 by black-box tests on its outputs;
-# see docs/adr/0006-pls-sem-engine.md. blk[k] is the construct of indicator
-# k and pos[k] its place among the nb[blk[k]] indicators of that construct;
-# mode[j] is 1 for Mode A, 2 for Mode B, 3 for a reflective construct (Mode A
-# weights, then consistent PLS); pre[i, j] = m > 0 when construct i is the
-# m-th antecedent of j. One row per sample: the weights (one per indicator),
-# the loadings (p x J, by column; a cross-loading is the covariance times 0,
-# so it keeps seminr's signed zero), path coefficients, total effects and
-# HTMT (J x J each, by column), iterations, the last weight change, and a
-# status: 1 when consistent PLS is undefined for the sample (a rho_A that is
-# not positive and finite), for which seminr warns.
+# numeric step was matched to seminr 2.5.0 and 2.6.0 by black-box tests on
+# their outputs; see docs/adr/0006-pls-sem-engine.md. blk[k] is the construct
+# of indicator k and pos[k] its place among the nb[blk[k]] indicators of that
+# construct; mode[j] is 1 for Mode A, 2 for Mode B, 3 for a reflective
+# construct (Mode A weights, then consistent PLS), 4 for a Mode A composite
+# that seminr < 2.6.0 corrects too; pre[i, j] = m > 0 when construct i is
+# the m-th antecedent of j. One row per sample: the weights (one per
+# indicator), the loadings (p x J, by column; a cross-loading is the
+# covariance times 0, so it keeps seminr's signed zero), path coefficients,
+# total effects and HTMT (J x J each, by column), iterations, the last weight
+# change, and a status: 1 when consistent PLS is undefined for the sample (a
+# rho_A that is not positive and finite), 2 when its solution is
+# inadmissible, as seminr 2.6.0 checks it.
 aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
   n <- nrow(X)
   p <- ncol(X)
@@ -89,6 +91,9 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
   Bm <- matrix(0, J, J)
   H <- matrix(0, J, J)
   Rc <- matrix(0, J, J)
+  Sg <- matrix(0, J, J)
+  Lc <- matrix(0, J, J)
+  dn <- integer(J)
   rho <- numeric(J)
   wwv <- numeric(J)
   plsc <- 0L
@@ -180,15 +185,15 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
     # Consistent PLS (Dijkstra and Henseler, 2015) when the model has a
     # reflective construct: rho_A from the final weights w and the indicators'
     # covariances S, (w'w)^2 w'(S - diag S)w / w'(ww' - diag ww')w, for every
-    # Mode A construct with two or more indicators (seminr 2.5.0 corrects
-    # Mode A composites too, not only reflective constructs); 1 for Mode B
-    # constructs and single indicators. The paths then come from the score
+    # reflective construct with two or more indicators, and for the Mode A
+    # composites that seminr < 2.6.0 corrects too (mode 4); 1 for other
+    # composites and single indicators. The paths then come from the score
     # correlations divided by sqrt(rho_i rho_j).
     bad <- 0L
     if (plsc == 1L) {
       for (j in seq_len(J)) {
         rho[j] <- 1
-        if (mode[j] != 2L) {
+        if (mode[j] == 3L || mode[j] == 4L) {
           wc <- matrix(0, nb[j], 1L)
           for (k in seq_len(p)) if (blk[k] == j) wc[pos[k], 1L] <- W[k, j]
           qm <- t(wc) %*% wc
@@ -245,6 +250,70 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
         for (i in seq_len(J)) if (pre[i, j] > 0) Bm[i, j] <- bj[pre[i, j]]
       }
     }
+    # Admissibility of a consistent-PLS solution, as seminr 2.6.0 checks it
+    # (from 2.6.0 on, bootstrap_model() leaves inadmissible resamples out),
+    # thresholds measured by bisection: a rho_A above one; a loading of a
+    # reflective construct above 1 + 5e-9 in absolute value (a single
+    # indicator's loading is one up to rounding); a corrected construct
+    # correlation of one or more in absolute value; an R-squared outside
+    # [0, 1]; or a construct correlation matrix implied by the structural
+    # model whose smallest eigenvalue is below 1e-8. That matrix has the
+    # corrected correlations of the exogenous constructs, unit variances, and
+    # for each endogenous construct (after its antecedents) the correlations
+    # its paths imply; its smallest eigenvalue is above 1e-8 exactly when the
+    # matrix less 1e-8 on the diagonal has a Cholesky factor.
+    adm <- 1L
+    if (plsc == 1L && bad == 0L) {
+      for (j in seq_len(J)) {
+        if (mode[j] == 3L && rho[j] > 1) adm <- 0L
+        if (mode[j] == 3L) for (k in seq_len(p)) if (blk[k] == j && abs(sqrt(rho[j]) / wwv[j] * W[k, j]) > 1 + 5e-9) adm <- 0L
+        r2 <- 0
+        na <- 0L
+        for (i in seq_len(J)) {
+          if (i != j && abs(Rc[i, j]) >= 1) adm <- 0L
+          if (pre[i, j] > 0) {
+            na <- na + 1L
+            r2 <- r2 + Bm[i, j] * Rc[i, j]
+          }
+        }
+        if (na > 0L && (r2 < 0 || r2 > 1)) adm <- 0L
+      }
+      if (adm == 1L) {
+        for (j in seq_len(J)) {
+          dn[j] <- 1L
+          for (i in seq_len(J)) if (pre[i, j] > 0) dn[j] <- 0L
+        }
+        for (j in seq_len(J)) for (i in seq_len(J)) Sg[i, j] <- if (dn[i] == 1L && dn[j] == 1L) Rc[i, j] else 0
+        for (pass in seq_len(J)) for (j in seq_len(J)) if (dn[j] == 0L) {
+          rdy <- 1L
+          for (i in seq_len(J)) if (pre[i, j] > 0 && dn[i] == 0L) rdy <- 0L
+          if (rdy == 1L) {
+            for (k in seq_len(J)) if (dn[k] == 1L) {
+              s <- 0
+              for (i in seq_len(J)) if (pre[i, j] > 0) s <- s + Bm[i, j] * Sg[i, k]
+              Sg[j, k] <- s
+              Sg[k, j] <- s
+            }
+            Sg[j, j] <- 1
+            dn[j] <- 1L
+          }
+        }
+        for (k in seq_len(J)) {
+          d <- Sg[k, k] - 1e-8
+          for (m in seq_len(k - 1L)) d <- d - Lc[k, m] * Lc[k, m]
+          if (!(d > 0)) {
+            adm <- 0L
+            break
+          }
+          Lc[k, k] <- sqrt(d)
+          for (i in seq_len(J)) if (i > k) {
+            s <- Sg[i, k]
+            for (m in seq_len(k - 1L)) s <- s - Lc[i, m] * Lc[k, m]
+            Lc[i, k] <- s / Lc[k, k]
+          }
+        }
+      }
+    }
     Tm <- Bm
     Pw <- Bm
     if (J > 1L) for (m in 2:J) {
@@ -285,10 +354,17 @@ aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
     }
     out[r, p + pJ + 3L * JJ + 1L] <- it
     out[r, p + pJ + 3L * JJ + 2L] <- dw
-    out[r, p + pJ + 3L * JJ + 3L] <- bad
+    out[r, p + pJ + 3L * JJ + 3L] <- if (bad == 1L) 1 else if (adm == 0L) 2 else 0
   }
   out
 }
+
+# TRUE when the installed seminr is 2.6.0 or later. Its consistent PLS
+# corrects only reflective constructs, and its bootstrap_model() also leaves
+# out the resamples whose consistent-PLS solution is inadmissible (ADR-0006,
+# amendment "seminr 2.6.0"). aw_boot_pls() follows the installed version,
+# because its results must equal what bootstrap_model() would return.
+aw_seminr_260 <- function() utils::packageVersion("seminr") >= "2.6.0"
 
 # What the PLS kernel needs from a model estimated by seminr::estimate_pls(),
 # or NULL when the model is outside the native subset: composites with Mode A
@@ -324,6 +400,10 @@ aw_pls_spec <- function(model) {
   types <- lapply(cons, function(cn) unique(mm[mm[, "construct"] == cn, "type"]))
   if (any(lengths(types) != 1L)) return(NULL)
   mode <- 1L + (unlist(types) == "B") + 2L * (unlist(types) == "C")
+  # seminr < 2.6.0 corrects the Mode A composites of a model with a
+  # reflective construct as well (mode 4); seminr 2.6.0 leaves every
+  # composite as it is (rho_A = 1), as Dijkstra and Henseler (2015) do.
+  if (any(mode == 3L) && !aw_seminr_260()) mode[mode == 1L] <- 4L
   nb <- tabulate(blk, J)
   # seminr rejects a Mode B construct with one indicator.
   if (any(mode == 2L & nb < 2L)) return(NULL)
@@ -420,15 +500,22 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 #' higher-order constructs, missing data) are passed to
 #' `seminr::bootstrap_model()` itself.
 #'
-#' Two behaviours of `bootstrap_model()` (seminr 2.5.0) are kept, so that
-#' the numbers stay seminr's. Every resample is estimated with seminr's
+#' The engine follows the installed version of seminr (2.5.0 or 2.6.0), so
+#' that the numbers stay seminr's. Every resample is estimated with seminr's
 #' default `maxIt` (300) and `stopCriterion` (7), whatever the model was
-#' estimated with. In a model with a reflective construct, consistent PLS
-#' corrects the correlations of every Mode A construct with two or more
-#' indicators, `composite()` ones included, not only the reflective ones;
-#' resamples for which it is undefined (a negative rho_A) are left out of the
-#' bootstrap and `boots` counts the others, with a message. When fewer than
-#' two resamples are left, the model goes to `bootstrap_model()`, which then
+#' estimated with, as `bootstrap_model()` does. In a model with a reflective
+#' construct, consistent PLS corrects the reflective constructs and treats
+#' composites as fully reliable; seminr before 2.6.0 corrects every Mode A
+#' construct with two or more indicators, `composite()` ones included.
+#' Resamples for which consistent PLS is undefined (a negative rho_A) are
+#' left out of the bootstrap and `boots` counts the others, with a message.
+#' From seminr 2.6.0 on, so are the resamples whose consistent-PLS solution
+#' is inadmissible (a rho_A above one, a loading of a reflective construct
+#' above one, a corrected construct correlation of one or more, an R-squared
+#' outside \[0, 1\], or a construct correlation matrix implied by the
+#' structural model that is not positive definite), and the object also
+#' records `boots_requested` and `boots_dropped`. When fewer than two
+#' resamples are left, the model goes to `bootstrap_model()`, which then
 #' stops.
 #'
 #' With `cores` above 1 the resamples are split over that many worker
@@ -459,20 +546,23 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL, cores = 1L) {
   if (!requireNamespace("seminr", quietly = TRUE)) stop("aw_boot_pls() needs the seminr package")
   if (is.null(seed)) seed <- sample.int(100000, 1)
+  # The counts keep the type nboot was given, as in seminr.
+  requested <- nboot
   boots <- nboot
   nboot <- as.integer(nboot)
   spec <- aw_pls_spec(seminr_model)
   delegate <- function() {
-    out <- seminr::bootstrap_model(seminr_model, nboot = nboot, seed = seed)
+    out <- seminr::bootstrap_model(seminr_model, nboot = requested, seed = seed)
     out$native <- FALSE
     out
   }
   if (is.null(spec) || nboot < 1L) return(delegate())
   n <- nrow(spec$X)
   # The original sample, for HTMT and total effects; a sample for which
-  # consistent PLS is undefined (status column) goes to seminr, which warns.
+  # consistent PLS is undefined (status 1) goes to seminr, which warns. An
+  # inadmissible estimate (status 2) is bootstrapped, as seminr does.
   orig <- aw_pls_run(spec, matrix(seq_len(n), ncol = 1L))
-  if (is.null(orig) || orig[1L, ncol(orig)] != 0) return(delegate())
+  if (is.null(orig) || orig[1L, ncol(orig)] == 1) return(delegate())
   had <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
   if (had) old <- get(".Random.seed", envir = globalenv())
   idx <- matrix(0L, n, nboot)
@@ -489,23 +579,30 @@ aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL, cores = 1L) {
   if (had) assign(".Random.seed", old, envir = globalenv()) else rm(".Random.seed", envir = globalenv())
   if (is.null(res)) return(delegate())
   # Like bootstrap_model(), leave out the resamples for which consistent PLS
-  # is undefined (seminr reports them as failing to converge) and count only
-  # the others in `boots`; with fewer than two left, seminr stops with an
-  # error and returns the model unbootstrapped, so that case goes to seminr.
-  ok <- res[, ncol(res)] == 0
+  # is undefined (seminr 2.5.0 reports them as failing to converge) and, from
+  # seminr 2.6.0 on, those whose solution is inadmissible (seminr warns
+  # there), and count only the others in `boots`; with fewer than two left,
+  # seminr stops with an error and returns the model unbootstrapped, so that
+  # case goes to seminr.
+  v260 <- aw_seminr_260()
+  st <- res[, ncol(res)]
+  ok <- if (v260) st == 0 else st != 1
   if (sum(ok) < 2L) return(delegate())
   if (!all(ok)) {
-    message(sprintf("aw_boot_pls(): %d of %d resamples left out of the bootstrap statistics: consistent PLS is undefined for them (rho_A not positive), as in seminr::bootstrap_model().",
-                    sum(!ok), nboot))
+    message(sprintf("aw_boot_pls(): %d of %d resamples left out of the bootstrap statistics: consistent PLS is %s for them, as in seminr::bootstrap_model().",
+                    sum(!ok), nboot, if (v260) "undefined (rho_A not positive) or inadmissible" else "undefined (rho_A not positive)"))
     res <- res[ok, , drop = FALSE]
     boots <- boots - sum(!ok)
   }
-  aw_pls_boot_object(seminr_model, spec, res, orig, nrow(res), boots, seed)
+  # seminr 2.6.0 also records the resamples requested and dropped (in the
+  # type nboot was given), before the seed.
+  counts <- if (v260) list(boots_requested = requested, boots_dropped = requested - boots)
+  aw_pls_boot_object(seminr_model, spec, res, orig, nrow(res), boots, seed, counts)
 }
 
 # Unpacks kernel rows into the arrays and tables of a boot_seminr_model;
 # orig is the kernel's row for the original sample.
-aw_pls_boot_object <- function(model, spec, res, orig, nboot, boots, seed) {
+aw_pls_boot_object <- function(model, spec, res, orig, nboot, boots, seed, counts = NULL) {
   cons <- spec$cons
   items <- spec$items
   p <- length(items)
@@ -532,6 +629,7 @@ aw_pls_boot_object <- function(model, spec, res, orig, nboot, boots, seed) {
   out$HTMT_descriptives <- aw_pls_describe(htmt, out$boot_HTMT)
   out$total_paths_descriptives <- aw_pls_describe(total, out$boot_total_paths, src, tgt)
   out$boots <- boots
+  for (f in names(counts)) out[[f]] <- counts[[f]]
   out$seed <- seed
   out$native <- TRUE
   class(out) <- c("boot_seminr_model", "seminr_model")

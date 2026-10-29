@@ -1,5 +1,7 @@
 # R CMD check of the arwad package (r/) on Linux, macOS and Windows, with the
 # Goose toolchain installed so that the equivalence corpus runs natively.
+# The PLS-SEM engine follows the installed seminr; one Linux job checks it
+# against seminr 2.5.0, whose consistent PLS and bootstrap differ from 2.6.0.
 name: R-CMD-check
 
 on:
@@ -12,7 +14,7 @@ permissions:
 
 jobs:
   check:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.os }}${{ matrix.seminr && format(' (seminr {0})', matrix.seminr) || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,6 +26,9 @@ jobs:
             goose: goose-v2026.3-macos-arm64.tar.gz
           - os: windows-latest
             goose: goose-v2026.3-windows-x64.zip
+          - os: ubuntu-latest
+            goose: goose-v2026.3-linux-x64.tar.gz
+            seminr: '2.5.0'
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
@@ -39,6 +44,10 @@ jobs:
           working-directory: r
           extra-packages: any::rcmdcheck
           needs: check
+
+      - name: Install seminr ${{ matrix.seminr }} from the CRAN archive
+        if: matrix.seminr
+        run: Rscript -e 'install.packages("https://cran.r-project.org/src/contrib/Archive/seminr/seminr_${{ matrix.seminr }}.tar.gz", repos = NULL, type = "source"); stopifnot(packageVersion("seminr") == "${{ matrix.seminr }}")'
 
       - name: Install Goose v2026.3
         shell: bash
@@ -60,7 +69,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/arwad-cache
-          key: arwad-units-${{ runner.os }}-${{ github.sha }}
+          key: arwad-units-${{ runner.os }}${{ matrix.seminr && format('-seminr{0}', matrix.seminr) || '' }}-${{ github.sha }}
           restore-keys: arwad-units-${{ runner.os }}-
 
       - uses: r-lib/actions/check-r-package@v2

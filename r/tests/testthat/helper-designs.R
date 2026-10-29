@@ -191,9 +191,25 @@ aw_pls_models <- function() {
   out
 }
 
-# The models of aw_pls_models(), estimated by seminr::estimate_pls().
+# The models of aw_pls_models(), estimated by seminr::estimate_pls(). From
+# seminr 2.6.0 on, estimate_pls() warns when a consistent-PLS solution is
+# inadmissible (common in the small synthetic samples) and returns it all
+# the same; only that warning is muffled here, and the list's attribute
+# "inadmissible" records which models it was given for.
 aw_pls_fit_models <- function() {
-  lapply(aw_pls_models(), function(d) suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)))
+  ds <- aw_pls_models()
+  fits <- stats::setNames(vector("list", length(ds)), names(ds))
+  bad <- stats::setNames(logical(length(ds)), names(ds))
+  for (nm in names(ds)) {
+    d <- ds[[nm]]
+    fits[[nm]] <- withCallingHandlers(suppressMessages(seminr::estimate_pls(d$data, d$mm, d$sm, maxIt = d$maxIt)),
+      warning = function(w) if (grepl("PLSc solution is inadmissible", conditionMessage(w), fixed = TRUE)) {
+        bad[[nm]] <<- TRUE
+        invokeRestart("muffleWarning")
+      })
+  }
+  attr(fits, "inadmissible") <- bad
+  fits
 }
 
 # For a case seminr does not bootstrap (it stops when fewer than two

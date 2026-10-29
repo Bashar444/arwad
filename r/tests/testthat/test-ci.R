@@ -23,9 +23,19 @@ test_that("aw_pls_ci(type = \"percentile\") equals seminr's summary() on every t
   expect_gte(length(fits), 50L)
   tabs <- c(paths = "bootstrapped_paths", total_paths = "bootstrapped_total_paths", total_indirect_paths = "bootstrapped_total_indirect_paths",
             loadings = "bootstrapped_loadings", weights = "bootstrapped_weights", HTMT = "bootstrapped_HTMT")
+  covered <- 0L
   for (k in seq_along(fits)) {
     nm <- names(fits)[k]
-    b <- suppressMessages(aw_boot_pls(fits[[nm]], nboot = 20L, seed = k))
+    # From seminr 2.6.0 on, a weak consistent-PLS model can keep fewer than two
+    # of its 20 resamples (the others inadmissible): seminr then stops, and so
+    # does aw_boot_pls(), which hands that case to it. Nothing to compare.
+    utils::capture.output(b <- tryCatch(suppressMessages(aw_boot_pls(fits[[nm]], nboot = 20L, seed = k)), error = function(e) e))
+    if (!inherits(b, "boot_seminr_model")) {
+      expect_true(arwad:::aw_seminr_260() && any(fits[[nm]]$mmMatrix[, "type"] == "C"),
+                  label = paste(nm, "is a consistent-PLS model under seminr 2.6.0"))
+      next
+    }
+    covered <- covered + 1L
     for (alpha in c(0.05, 0.10)) {
       got <- aw_pls_ci(b, alpha = alpha, type = "percentile")
       want <- summary(b, alpha = alpha)
@@ -43,6 +53,7 @@ test_that("aw_pls_ci(type = \"percentile\") equals seminr's summary() on every t
       }
     }
   }
+  expect_gte(covered, 115L)
 })
 
 test_that("the bias correction is boot::boot.ci()'s with zero acceleration", {

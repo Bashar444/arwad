@@ -77,7 +77,7 @@ aw_ci_table <- function(rn, est, mu, sdv, tstat, draws, alpha, type, outside) {
 #' only by rounding, such as the loading of a single-indicator construct,
 #' get their percentile limits and no skewness.
 #'
-#' Unlike `summary()` of `seminr` 2.5.0, which reports total indirect effects
+#' Unlike `summary()` of `seminr` (2.5.0 and 2.6.0), which reports total indirect effects
 #' at 95% whatever `alpha` is, every table here uses `alpha`.
 #'
 #' @param boot A bootstrapped model, from [aw_boot_pls()] or

@@ -1,3 +1,24 @@
+# arwad 0.1.0.9001
+
+* `aw_boot_pls()` follows the installed seminr, 2.5.0 or 2.6.0 (CRAN, 13
+  October 2026), whose consistent PLS changed in two ways; both were matched
+  by black-box tests (ADR-0006, amendment "seminr 2.6.0"). seminr 2.6.0
+  treats composites as fully reliable (rho_A = 1), as Dijkstra and Henseler
+  do, so path coefficients of models that mix `reflective()` and Mode A
+  `composite()` constructs differ from 2.5.0's; and `bootstrap_model()`
+  leaves out every resample whose solution is inadmissible (a rho_A above
+  one, a reflective loading above one, a corrected construct correlation of
+  one or more, an R-squared outside [0, 1], or a construct correlation
+  matrix implied by the structural model whose smallest eigenvalue is below
+  1e-8), and records `boots_requested` and `boots_dropped`. Under 2.6.0,
+  `aw_boot_pls()` does the same, with the same counts. The CI now checks the
+  package against both versions. Found when the CI of the consistent-PLS
+  commit failed on all systems: CI installs the current CRAN release, this
+  laptop still had 2.5.0.
+* When `aw_boot_pls()` hands a model to seminr, it passes `nboot` as given,
+  so the counts in the result keep its type, as when seminr is called
+  directly (it passed an integer before).
+
 # arwad 0.1.0.9000
 
 * `aw_boot_pls()` runs models with `reflective()` constructs as native code:
