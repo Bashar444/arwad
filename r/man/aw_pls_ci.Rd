@@ -4,7 +4,12 @@
 \alias{aw_pls_ci}
 \title{Bias-corrected bootstrap confidence intervals for a PLS-SEM model}
 \usage{
-aw_pls_ci(boot, alpha = 0.05, type = c("bc", "percentile"), indirect = NULL)
+aw_pls_ci(
+  boot,
+  alpha = 0.05,
+  type = c("bc", "percentile", "bca"),
+  indirect = NULL
+)
 }
 \arguments{
 \item{boot}{A bootstrapped model, from \code{\link[=aw_boot_pls]{aw_boot_pls()}} or
@@ -15,7 +20,7 @@ one-sided test at 5\%, as the Primer uses for directional hypotheses and
 for HTMT, reads the matching limit of the 90\% interval (\code{alpha = 0.10}).}
 
 \item{type}{\code{"bc"}, the bias-corrected percentile interval (the default),
-or \code{"percentile"}.}
+\code{"bca"}, the bias-corrected and accelerated interval, or \code{"percentile"}.}
 
 \item{indirect}{Specific indirect effects to add, as a list of construct
 chains, each from the antecedent through the mediators to the outcome:
@@ -27,7 +32,8 @@ of the path coefficients along the chain in every resample, as
 A list of class \code{aw_pls_ci} with the tables \code{paths},
 \code{total_paths}, \code{total_indirect_paths}, \code{loadings}, \code{weights} and \code{HTMT}
 (and \code{specific_indirect_paths} when \code{indirect} is given), rows as in
-\code{summary()} of the bootstrapped model, and \code{alpha}, \code{type} and \code{nboot}.
+\code{summary()} of the bootstrapped model, and \code{alpha}, \code{type} and \code{nboot}
+(and \code{jackknife}, the number of leave-one-out estimates, for BCa).
 Each table has the columns \verb{Original Est.}, \verb{Bootstrap Mean}, \code{Bias}
 (mean minus estimate), \verb{Bootstrap SD}, \verb{T Stat.} (as \code{summary()} gives
 it: for HTMT, one minus the estimate over the standard deviation),
@@ -47,7 +53,7 @@ The default is the bias-corrected (BC) percentile interval (Efron, 1982;
 Efron and Tibshirani, 1993, section 14.3, with zero acceleration; Davison
 and Hinkley, 1997, section 5.3), the interval the PLS-SEM Primer
 recommends reporting (Hair, Hult, Ringle and Sarstedt, 4th ed.,
-pp. 164-166). With \code{z0 = qnorm(share of resamples below the estimate)},
+pp. 164-166). With \verb{z0 = qnorm(share of resamples below the estimate)},
 its limits are the bootstrap quantiles at levels
 \code{pnorm(2 * z0 + qnorm(alpha / 2))} and \code{pnorm(2 * z0 + qnorm(1 - alpha / 2))}.
 \code{z0} is the one \code{boot::boot.ci(type = "bca")} uses, and so are the levels
@@ -58,6 +64,18 @@ with \code{quantile(type = 7)}: with \code{type = "percentile"} the limits are
 half the resamples fall below the estimate. Bootstrap values that differ
 only by rounding, such as the loading of a single-indicator construct,
 get their percentile limits and no skewness.
+
+\code{type = "bca"} gives the bias-corrected and accelerated interval (Efron,
+1987; Efron and Tibshirani, 1993, section 14.3), which the Primer names
+for bootstrap distributions with skewness beyond plus or minus 2: the
+levels move to \code{pnorm(z0 + (z0 + z) / (1 - a * (z0 + z)))} with
+\code{z = qnorm(alpha / 2)} and \code{qnorm(1 - alpha / 2)}, and the acceleration
+\code{a} comes from the jackknife: the model is re-estimated on its n
+leave-one-out samples with the compiled PLS engine (with the model's own
+\code{maxIt} and stop criterion), and \code{a = sum(d^3) / (6 * sum(d^2)^1.5)} with
+\code{d} the jackknife mean minus each jackknife estimate. With \code{a = 0} the BCa
+interval is the BC interval. It needs a model in the engine's native
+subset and an estimate on every leave-one-out sample.
 
 Unlike \code{summary()} of \code{seminr} (2.5.0 and 2.6.0), which reports total indirect effects
 at 95\% whatever \code{alpha} is, every table here uses \code{alpha}.
@@ -83,6 +101,9 @@ application}. Cambridge University Press.
 
 Efron, B. (1982). \emph{The jackknife, the bootstrap and other resampling
 plans}. SIAM.
+
+Efron, B. (1987). Better bootstrap confidence intervals. \emph{Journal of the
+American Statistical Association, 82}(397), 171-185.
 
 Efron, B., & Tibshirani, R. J. (1993). \emph{An introduction to the bootstrap}.
 Chapman & Hall.

@@ -150,3 +150,84 @@ test_that("aw_pls_ci() gives the same tables for seminr's and Arwad's bootstrap,
   for (a in list(0, 1, -0.1, c(0.05, 0.1), NA_real_, "0.05")) expect_error(aw_pls_ci(b, alpha = a), "'alpha'")
   expect_error(aw_pls_ci(b, indirect = c("Image", "Value", "Satisfaction")), "list of character vectors")
 })
+
+test_that("BCa: the jackknife equals seminr's estimates on every leave-one-out sample, and the limits follow Efron's formula", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  fits <- aw_pls_fit_models()
+  designs <- aw_pls_models()
+  chain <- c("Image", "Value", "Satisfaction")
+  # Mode A composites, a Mode B construct, and all constructs reflective.
+  for (nm in c("mobi_ecsi_core", "mobi_ecsi_image_modeB", "mobi_ecsi_reflective")) {
+    m <- fits[[nm]]
+    d <- designs[[nm]]
+    n <- nrow(m$rawdata)
+    b <- suppressMessages(aw_boot_pls(m, nboot = 200L, seed = 5L))
+    ci <- aw_pls_ci(b, type = "bca", indirect = list(chain))
+    expect_identical(ci$jackknife, n)
+    expect_identical(colnames(ci$paths)[7:8], c("2.5% BCa CI", "97.5% BCa CI"))
+    # seminr's own estimates with each case left out (inadmissible ones too,
+    # as estimate_pls() returns them).
+    jk <- lapply(seq_len(n), function(i) suppressWarnings(suppressMessages(
+      seminr::estimate_pls(m$rawdata[-i, , drop = FALSE], d$mm, d$sm, maxIt = d$maxIt))))
+    bm <- m
+    class(bm) <- c("pls_model", "seminr_model")
+    spec <- arwad:::aw_pls_spec(bm)
+    rows <- arwad:::aw_pls_jack(spec)
+    cons <- spec$cons
+    J <- length(cons)
+    p <- length(spec$items)
+    at <- cbind(spec$items, cons[spec$blk])
+    for (i in seq_len(n)) {
+      expect_true(identical(rows[i, seq_len(p)], unname(jk[[i]]$outer_weights[at]), num.eq = FALSE), label = paste(nm, i, "weights"))
+      expect_true(identical(rows[i, p + seq_len(p * J)], as.vector(unname(jk[[i]]$outer_loadings[spec$items, cons])), num.eq = FALSE),
+                  label = paste(nm, i, "loadings"))
+      expect_true(identical(rows[i, p + p * J + seq_len(J * J)], as.vector(jk[[i]]$path_coef[cons, cons]), num.eq = FALSE),
+                  label = paste(nm, i, "paths"))
+    }
+    # The limits from seminr's jackknife and Arwad's bootstrap by Efron's
+    # formula, written out here.
+    bca <- function(x, est, j) {
+      dd <- mean(j) - j
+      a <- sum(dd^3) / (6 * sum(dd^2)^1.5)
+      z0 <- stats::qnorm(sum(x < est) / length(x))
+      z <- stats::qnorm(c(0.025, 0.975))
+      stats::quantile(x, stats::pnorm(z0 + (z0 + z) / (1 - a * (z0 + z))), type = 7, names = FALSE)
+    }
+    for (r in rownames(ci$paths)) {
+      pp <- strsplit(r, "  ->  ", fixed = TRUE)[[1L]]
+      j <- vapply(jk, function(f) f$path_coef[pp[1L], pp[2L]], 1)
+      expect_identical(unname(ci$paths[r, 7:8]), bca(b$boot_paths[pp[1L], pp[2L], ], m$path_coef[pp[1L], pp[2L]], j),
+                       label = paste(nm, r, "BCa limits"))
+    }
+    for (r in rownames(ci$loadings)) {
+      pp <- strsplit(r, "  ->  ", fixed = TRUE)[[1L]]
+      x <- b$boot_loadings[pp[1L], pp[2L], ]
+      if (diff(range(x)) <= 1e-12 * max(abs(x))) next
+      j <- vapply(jk, function(f) f$outer_loadings[pp[1L], pp[2L]], 1)
+      expect_identical(unname(ci$loadings[r, 7:8]), bca(x, m$outer_loadings[pp[1L], pp[2L]], j), label = paste(nm, r, "BCa limits"))
+    }
+    j <- vapply(jk, function(f) f$path_coef[chain[1L], chain[2L]] * f$path_coef[chain[2L], chain[3L]], 1)
+    x <- b$boot_paths[chain[1L], chain[2L], ] * b$boot_paths[chain[2L], chain[3L], ]
+    expect_identical(unname(ci$specific_indirect_paths[1L, 7:8]),
+                     bca(x, m$path_coef[chain[1L], chain[2L]] * m$path_coef[chain[2L], chain[3L]], j), label = paste(nm, "indirect BCa limits"))
+  }
+})
+
+test_that("BCa with zero acceleration is the BC interval, and needs a model in the native subset", {
+  skip_if_no_toolchain()
+  skip_if_not_installed("seminr")
+  x <- stats::qnorm(seq(0.001, 0.999, length.out = 501)) * 0.1 + 0.3
+  for (t0 in c(0.25, 0.3, 0.37)) {
+    expect_equal(arwad:::aw_ci_limits(x, t0, 0.05, "bca", 0)$lim, arwad:::aw_ci_limits(x, t0, 0.05, "bc")$lim, tolerance = 1e-14)
+  }
+  # The estimate outside every resample: the extreme resamples, as for BC.
+  expect_identical(arwad:::aw_ci_limits(x, 1, 0.05, "bca", 0.1)$lim, rep(max(x), 2L))
+  expect_identical(arwad:::aw_ci_accel(rep(0.4, 10L)), 0)
+  mm <- seminr::constructs(seminr::composite("Image", seminr::multi_items("IMAG", 1:5)),
+                           seminr::composite("Value", seminr::multi_items("PERV", 1:2)))
+  sm <- seminr::relationships(seminr::paths(from = "Image", to = "Value"))
+  mf <- suppressMessages(seminr::estimate_pls(seminr::mobi, mm, sm, inner_weights = seminr::path_factorial))
+  bf <- suppressMessages(aw_boot_pls(mf, nboot = 20L, seed = 1L))
+  expect_error(aw_pls_ci(bf, type = "bca"), "outside it")
+})

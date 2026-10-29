@@ -73,7 +73,9 @@ aw_boot_ols <- function(X, y, B = 1000L) {
 # rho_A that is not positive and finite), 2 when its solution is
 # inadmissible, as seminr 2.6.0 checks it.
 aw_pls_kernel <- function(X, blk, pos, nb, mode, pre, maxIt, crit, idx) {
-  n <- nrow(X)
+  # The sample size is the number of rows of idx: n for a bootstrap
+  # resample, n - 1 for a leave-one-out (jackknife) sample.
+  n <- nrow(idx)
   p <- ncol(X)
   J <- nrow(pre)
   R <- ncol(idx)
@@ -427,6 +429,17 @@ aw_pls_unit <- function() {
 # caller then hands the work to seminr).
 aw_pls_run <- function(spec, idx) {
   tryCatch(aw_pls_call(aw_pls_unit(), spec, idx), error = function(e) NULL)
+}
+
+# The model re-estimated on its n leave-one-out samples (the jackknife behind
+# the acceleration of a BCa interval), with the model's own maxIt and stop
+# criterion, as for the original sample. Row i leaves out case i; NULL when
+# the native run fails.
+aw_pls_jack <- function(spec) {
+  n <- nrow(spec$X)
+  idx <- matrix(0L, n - 1L, n)
+  for (i in seq_len(n)) idx[, i] <- seq_len(n)[-i]
+  aw_pls_run(spec, idx)
 }
 
 # A socket cluster of `cores` new R processes set up like this one: its

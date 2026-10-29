@@ -1,3 +1,17 @@
+# arwad 0.1.0.9002
+
+* `aw_pls_ci(type = "bca")`: bias-corrected and accelerated (BCa) intervals
+  (Efron, 1987), which the PLS-SEM Primer names for bootstrap distributions
+  with skewness beyond plus or minus 2. The acceleration comes from the
+  jackknife, the model re-estimated on its n leave-one-out samples in one
+  call of the compiled PLS kernel, which now takes the sample size from its
+  index matrix (bootstrap results unchanged). The leave-one-out estimates
+  equal `seminr::estimate_pls()` bit for bit (Mode A, Mode B, consistent
+  PLS), and the limits equal Efron's formula; BCa intervals for the ECSI
+  model took 0.43 s, against 4.7 s for the same jackknife with seminr.
+  Models outside the native subset stop with the reason (ADR-0007,
+  amendment).
+
 # arwad 0.1.0.9001
 
 * `aw_boot_pls()` follows the installed seminr, 2.5.0 or 2.6.0 (CRAN, 13

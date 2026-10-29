@@ -29,4 +29,15 @@ PLS-SEM results are judged by bootstrap confidence intervals. The PLS-SEM Primer
 ## Consequences
 
 - `aw_pls_ci(boot)` turns any `seminr` or Arwad bootstrap into the intervals the Primer asks for, in one call.
-- Not done: BCa intervals (the acceleration needs a jackknife, one re-estimation per case, a natural job for the compiled kernel) and studentized intervals.
+- Not done: BCa intervals (the acceleration needs a jackknife, one re-estimation per case, a natural job for the compiled kernel) and studentized intervals. (BCa: done, see the amendment below.)
+
+## Amendment (29 October 2026): BCa intervals
+
+`aw_pls_ci(boot, type = "bca")` gives the bias-corrected and accelerated interval (Efron, 1987; Efron and Tibshirani, 1993, section 14.3), the interval the Primer names for bootstrap distributions with skewness beyond ±2. Everything not stated here is as for BC: `z0` from the share of resamples strictly below the estimate, quantiles `type = 7`, percentile limits for values that differ only by rounding, the extreme resamples when the estimate lies outside them.
+
+1. **Levels.** `pnorm(z0 + (z0 + z) / (1 - a * (z0 + z)))` with `z = qnorm(alpha / 2)` and `qnorm(1 - alpha / 2)`: the adjusted levels of `boot::boot.ci(type = "bca")`. With `a = 0` they are the BC levels (equal up to rounding in the last bits, because the expression differs).
+2. **Acceleration.** From the jackknife: `a = sum(d^3) / (6 * sum(d^2)^1.5)`, `d` the mean of the n leave-one-out estimates minus each of them (Efron and Tibshirani, 1993, equation 14.15; `boot.ci()` with jackknife influence values gives the same `a`, the factor n − 1 cancels). 0 when the estimates do not vary.
+3. **The jackknife runs in the compiled kernel.** The kernel now takes the sample size from its index matrix (n rows for a bootstrap resample, n − 1 for a leave-one-out sample), so bootstrap results are unchanged and the n leave-one-out estimates come from one kernel call. They use the model's own `maxIt` and stop criterion, as the original estimate does (the bootstrap resamples use `seminr`'s defaults, ADR-0006). Specific and total indirect effects follow the coefficients as for the bootstrap draws.
+4. **Scope.** The model must be in the engine's native subset (it is re-estimated); for others `type = "bca"` stops with the reason. Consistent PLS: an inadmissible leave-one-out estimate is kept, as `estimate_pls()` returns it; if consistent PLS is undefined for any leave-one-out sample (a rho_A not positive), BCa stops and points to BC. The model is re-estimated under the installed `seminr`'s rules (ADR-0006, amendment "seminr 2.6.0").
+
+Validation (`r/tests/testthat/test-ci.R`, seminr 2.5.0 and 2.6.0): on the ECSI model with Mode A composites, with a Mode B construct, and with every construct reflective, the n = 250 compiled leave-one-out estimates of weights, loadings and paths equal `seminr::estimate_pls()` on the same samples bit for bit, and the BCa limits of paths, loadings and a specific indirect effect equal Efron's formula written out with `seminr`'s jackknife. Time on the laptop, BCa intervals including the jackknife: 0.43 s (ECSI, Mode A) and 0.36 s (all reflective) against 4.7 s and 6.1 s for the same jackknife with `seminr::estimate_pls()`; 2.8 s for the Primer's extended model (n = 344) against 15.2 s.
