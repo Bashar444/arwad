@@ -17,7 +17,15 @@
   laptop still had 2.5.0.
 * When `aw_boot_pls()` hands a model to seminr, it passes `nboot` as given,
   so the counts in the result keep its type, as when seminr is called
-  directly (it passed an integer before).
+  directly (it passed an integer before), and it passes `cores`, as its
+  documentation says (before, seminr chose the number of processes itself:
+  all cores, which seminr 2.5.0 does even under `R CMD check`'s limit of
+  two, and the new CI job with 2.5.0 failed there).
+* Benchmark of consistent PLS (bench/phase2/REPORT.md, section 3c): the ECSI
+  model with all seven constructs reflective, 10,000 resamples, took 20.0 s
+  on four cores against 169.8 s for `seminr::bootstrap_model()` 2.6.0 on the
+  same cores (8.5 times faster) and 26.1 s on one core (6.5 times faster);
+  arrays identical, the same 3,679 resamples kept.
 
 # arwad 0.1.0.9000
 

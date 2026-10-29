@@ -1,6 +1,6 @@
 # Phase 2 engines: compiled bootstraps of OLS, GLM and PLS-SEM models
 
-**Date:** 27 October 2026 (PLS-SEM figures re-measured 28 October 2026, version 0.0.0.9013; formative constructs, §3b, version 0.0.0.9014) · **Status:** preliminary, single laptop (the Phase 0 machine) · **Raw data:** [`ols_boot_timing.csv`](ols_boot_timing.csv), [`glm_boot_timing.csv`](glm_boot_timing.csv), [`pls_boot_timing.csv`](pls_boot_timing.csv), [`pls_modeB_timing.csv`](pls_modeB_timing.csv) · **Scripts:** [`ols_boot_bench.R`](ols_boot_bench.R), [`glm_boot_bench.R`](glm_boot_bench.R), [`pls_boot_bench.R`](pls_boot_bench.R), [`pls_modeB_bench.R`](pls_modeB_bench.R)
+**Date:** 27 October 2026 (PLS-SEM figures re-measured 28 October 2026, version 0.0.0.9013; formative constructs, §3b, version 0.0.0.9014; reflective constructs, §3c, 29 October 2026, version 0.1.0.9001 against seminr 2.6.0) · **Status:** preliminary, single laptop (the Phase 0 machine) · **Raw data:** [`ols_boot_timing.csv`](ols_boot_timing.csv), [`glm_boot_timing.csv`](glm_boot_timing.csv), [`pls_boot_timing.csv`](pls_boot_timing.csv), [`pls_modeB_timing.csv`](pls_modeB_timing.csv), [`pls_plsc_timing.csv`](pls_plsc_timing.csv) · **Scripts:** [`ols_boot_bench.R`](ols_boot_bench.R), [`glm_boot_bench.R`](glm_boot_bench.R), [`pls_boot_bench.R`](pls_boot_bench.R), [`pls_modeB_bench.R`](pls_modeB_bench.R), [`pls_plsc_bench.R`](pls_plsc_bench.R)
 
 ## Summary
 
@@ -8,7 +8,7 @@
 
 `arwad::aw_glm_fit()` and `arwad::aw_boot_glm()` do the same for generalised linear models: iteratively reweighted least squares for binomial (logit), Poisson (log) and Gaussian (identity) models. For 1,000 replicates of a logistic regression on a 200 by 5 design, `aw_boot_glm()` took **382.4 ms**: **10.8 times faster** than a `glm()` loop and **3.25 times faster** than a `glm.fit()` loop, with **identical coefficients** to both.
 
-`arwad::aw_boot_pls()` is a compiled replacement for `seminr::bootstrap_model()`, the reference implementation of the PLS-SEM bootstrap in R. It re-estimates a model on case resamples with the PLS path algorithm (Mode A and Mode B composites, path weighting scheme) and returns the same `boot_seminr_model` object, so `summary()` works on it unchanged. Path coefficients, total effects, loadings and weights are **bit-identical** to seminr's; HTMT ratios agree to within four units in the last place (about three in four values identical). For **10,000 resamples** of the seven-construct ECSI model, the number the Primer recommends, it took **12.5 s on four cores** against **241.4 s** for seminr on the same four cores (seminr's fastest of three runs): **19.3 times faster**; on a single core it took **27.3 s** (**8.8 times faster** than seminr on four). For 1,000 resamples on one core it took **2.46 s**: 10.2 times faster than seminr on four cores and 18.7 times faster than seminr on one core.
+`arwad::aw_boot_pls()` is a compiled replacement for `seminr::bootstrap_model()`, the reference implementation of the PLS-SEM bootstrap in R. It re-estimates a model on case resamples with the PLS path algorithm (Mode A and Mode B composites, and reflective constructs by consistent PLS; path weighting scheme) and returns the same `boot_seminr_model` object, so `summary()` works on it unchanged. Path coefficients, total effects, loadings and weights are **bit-identical** to seminr's; HTMT ratios agree to within four units in the last place (about three in four values identical). For **10,000 resamples** of the seven-construct ECSI model, the number the Primer recommends, it took **12.5 s on four cores** against **241.4 s** for seminr on the same four cores (seminr's fastest of three runs): **19.3 times faster**; on a single core it took **27.3 s** (**8.8 times faster** than seminr on four). For 1,000 resamples on one core it took **2.46 s**: 10.2 times faster than seminr on four cores and 18.7 times faster than seminr on one core. With every construct reflective (consistent PLS, §3c), 10,000 resamples of the same model took **20.0 s on four cores** against **169.8 s** for seminr 2.6.0: **8.5 times faster**, with identical arrays and the same resamples left out.
 
 ## 1. OLS bootstrap: what was measured
 
@@ -91,6 +91,26 @@ At 10,000 resamples on the same four cores, 370.1 / 25.7 = **14.4 times faster**
 
 Equivalence: the arrays of path coefficients, total effects, loadings and weights are identical to seminr's with all cores and with one core, at 1,000 and at 10,000 resamples. HTMT, counted in units in the last place over the 28,000 values of 1,000 resamples: 70.9% identical, 23.8% one unit apart, 5.2% two, 27 values three units and one value four units apart (largest relative difference 4.9e-16). The same count for the ECSI model of §3 gives 75.1% identical and at most three units apart; until this measurement the documentation said "within two units", which was too tight (corrected in [ADR-0006](../../docs/adr/0006-pls-sem-engine.md)). The first call, in a fresh cache, took 24.1 s.
 
+### 3c. Reflective constructs: consistent PLS on the full ECSI model
+
+Design: the ECSI model of §3 with all seven constructs `reflective()`, which seminr estimates by consistent PLS (PLSc): 7 constructs, 24 indicators (Complaints a single item), 12 paths, n = 250; path weighting scheme, `maxIt` = 3,000 as the Primer recommends (`bootstrap_model()` estimates the resamples with its default 300, and so does the engine; [ADR-0006](../../docs/adr/0006-pls-sem-engine.md)), stop criterion 1e-7, seed 123. Version 0.1.0.9001 against **seminr 2.6.0**, the current CRAN release (§1 to §3b used 2.5.0), the same laptop, 29 October 2026 ([`pls_plsc_bench.R`](pls_plsc_bench.R), [`pls_plsc_timing.csv`](pls_plsc_timing.csv)). The 1,000-resample times are medians of three runs; the 10,000-resample times come from one round, seminr first.
+
+| Contender | Resamples | Time | `aw_boot_pls()` on 1 core is |
+|---|---|---|---|
+| `aw_boot_pls()` | 1,000 | 2,905 ms | — |
+| `aw_boot_pls(cores = 4)` | 1,000 | 3,309 ms | 1.14 of its time |
+| `bootstrap_model()`, all cores | 1,000 | 18,340 ms | 6.31× faster |
+| `bootstrap_model(cores = 1)` | 1,000 | 44,520 ms | 15.33× faster |
+| `aw_boot_pls()` | 10,000 | 26.1 s | — |
+| `aw_boot_pls(cores = 4)` | 10,000 | 20.0 s | 0.77 of its time |
+| `bootstrap_model()`, all cores | 10,000 | 169.8 s | 6.51× faster |
+
+At 10,000 resamples on the same four cores, 169.8 / 20.0 = **8.5 times faster**; from one core, **6.5 times faster** than seminr on four. This is a single round, as in §3b, and seminr's time varies on this laptop, so these figures stand beside the headline of §3 rather than replacing it. At 1,000 resamples four worker processes cost more to start than they save (3.3 s against 2.9 s on one core); at 10,000 they pay off. Consistent PLS costs the engine about a fifth more than Mode A on the same model: 2,905 ms per 1,000 resamples against 2,457 ms in §3 (the reliability of each construct, path regressions on the corrected correlations, and the admissibility checks).
+
+Resamples left out: seminr 2.6.0 kept 370 of 1,000 and 3,679 of 10,000 resamples. It leaves out every resample whose consistent-PLS solution is undefined or inadmissible (a rho_A or a reflective loading above one, among other checks; §6), and this model, with a single-item construct and seven corrected blocks, fails them often. Both programs estimate every resample, so both times include the ones left out; the engine leaves out the same resamples.
+
+Equivalence: the arrays of path coefficients, total effects, loadings and weights, and the number of resamples kept, are identical to seminr's with all cores and with one core at 1,000 resamples, and at 10,000. HTMT, counted in units in the last place over the 7,770 values of the 370 kept resamples: 74.5% identical, 20.3% one unit apart, 5.1% two, 9 values three units apart (largest relative difference 4.2e-16). The first call, in a fresh cache, took 44.4 s: the kernel, with consistent PLS and its checks, is the largest function Arwad compiles so far.
+
 ## 4. Validation (Phase 2 rule: at least 50 datasets)
 
 [`r/tests/testthat/test-engines.R`](../../r/tests/testthat/test-engines.R), run in CI on Linux, macOS and Windows. The designs are 30 numeric data frames of R's `datasets` package (response = first numeric column, design = intercept plus the other numeric columns) and 25 seeded synthetic designs (n from 15 to 1,000, k from 2 to 6, predictor scales from 0.1 to 100).
@@ -124,4 +144,4 @@ A mistake caught by the benchmark: the first version of the PLS-SEM kernel assig
 
 ## 7. Environment and next steps
 
-Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0, Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): interaction terms in the native PLS-SEM path, and BCa intervals (Mode B joined the native path on 28 October 2026, bias-corrected percentile intervals followed the same day: `aw_pls_ci()`, [ADR-0007](../../docs/adr/0007-pls-sem-confidence-intervals.md), and consistent PLS in the evening, version 0.1.0.9000); then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).
+Intel Core i7-7600U (2 cores, 4 logical), Windows 11, R 4.6.0, seminr 2.5.0 (§1 to §3b) and 2.6.0 (§3c, installed in a separate library), Goose v2026.3, Rtools45 GCC 14.3. Next (ROADMAP Phase 2): interaction terms in the native PLS-SEM path, and BCa intervals (Mode B joined the native path on 28 October 2026, bias-corrected percentile intervals followed the same day: `aw_pls_ci()`, [ADR-0007](../../docs/adr/0007-pls-sem-confidence-intervals.md), and consistent PLS in the evening, version 0.1.0.9000, matched to seminr 2.6.0 on 29 October, version 0.1.0.9001); then the remaining engines (DEA, panel models, ARIMA/GARCH, meta-analysis).

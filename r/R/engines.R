@@ -528,7 +528,8 @@ aw_pls_describe <- function(est, boot, rows = NULL, cols = colnames(est)) {
 #' @param nboot The number of bootstrap resamples.
 #' @param seed The seed; when `NULL`, one is drawn with
 #'   `sample.int(100000, 1)`, as `bootstrap_model()` does.
-#' @param cores The number of processes to run the resamples in.
+#' @param cores The number of processes to run the resamples in, also when
+#'   the model is handed to `seminr::bootstrap_model()`.
 #' @return An object of class `boot_seminr_model`, laid out as
 #'   `bootstrap_model()` returns it, so `summary()` and seminr's other
 #'   methods work on it; `native` is `FALSE` when seminr produced it.
@@ -552,7 +553,7 @@ aw_boot_pls <- function(seminr_model, nboot = 500L, seed = NULL, cores = 1L) {
   nboot <- as.integer(nboot)
   spec <- aw_pls_spec(seminr_model)
   delegate <- function() {
-    out <- seminr::bootstrap_model(seminr_model, nboot = requested, seed = seed)
+    out <- seminr::bootstrap_model(seminr_model, nboot = requested, cores = cores, seed = seed)
     out$native <- FALSE
     out
   }

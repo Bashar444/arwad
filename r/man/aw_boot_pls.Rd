@@ -14,7 +14,8 @@ aw_boot_pls(seminr_model, nboot = 500L, seed = NULL, cores = 1L)
 \item{seed}{The seed; when \code{NULL}, one is drawn with
 \code{sample.int(100000, 1)}, as \code{bootstrap_model()} does.}
 
-\item{cores}{The number of processes to run the resamples in.}
+\item{cores}{The number of processes to run the resamples in, also when
+the model is handed to \code{seminr::bootstrap_model()}.}
 }
 \value{
 An object of class \code{boot_seminr_model}, laid out as
